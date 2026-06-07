@@ -15,6 +15,11 @@ AI provider and model. Row Level Security is turned on for both tables: a person
 read only their own user row, a superadmin can read and write all of them; any
 signed-in person can read the AI settings, only a superadmin can change them.
 
+**Order matters.** Within Block A, the tables are created first, then the
+`is_superadmin()` helper (which reads the users table), then the policies (which call
+the helper). Putting the helper before the table fails, because Postgres validates the
+helper as it is created and cannot find the table yet.
+
 **Order to apply.** Run block A once in the Supabase SQL editor. Then, after you have
 signed in to SQEPify once with Microsoft 365 (so your account exists in Supabase
 Auth), run block B once with your own email filled in, to make yourself the first
@@ -23,22 +28,6 @@ superadmin.
 **Block A — schema and access rules (safe to re-run):**
 
 ```sql
--- Helper: is the caller a superadmin?
-create or replace function public.is_superadmin()
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.users u
-    where lower(u.email) = lower(auth.jwt() ->> 'email')
-      and u.product_role = 'superadmin'
-      and u.is_active
-  );
-$$;
-
 -- users
 create table if not exists public.users (
   id            uuid primary key default gen_random_uuid(),
@@ -54,6 +43,35 @@ create table if not exists public.users (
 create unique index if not exists users_email_lower_idx
   on public.users (lower(email));
 
+-- app_settings (single row)
+create table if not exists public.app_settings (
+  id          boolean primary key default true check (id),
+  ai_provider text not null default 'anthropic'
+              check (ai_provider in ('anthropic', 'openai')),
+  ai_model    text not null default 'claude-sonnet-4-20250514',
+  updated_at  timestamptz not null default now()
+);
+
+insert into public.app_settings (id) values (true)
+on conflict (id) do nothing;
+
+-- helper, created after the users table exists
+create or replace function public.is_superadmin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.users u
+    where lower(u.email) = lower(auth.jwt() ->> 'email')
+      and u.product_role = 'superadmin'
+      and u.is_active
+  );
+$$;
+
+-- access rules, created after the helper exists
 alter table public.users enable row level security;
 
 drop policy if exists users_select_self on public.users;
@@ -66,18 +84,6 @@ create policy users_all_superadmin on public.users
   for all
   using (public.is_superadmin())
   with check (public.is_superadmin());
-
--- app_settings (single row)
-create table if not exists public.app_settings (
-  id          boolean primary key default true check (id),
-  ai_provider text not null default 'anthropic'
-              check (ai_provider in ('anthropic', 'openai')),
-  ai_model    text not null default 'claude-sonnet-4-20250514',
-  updated_at  timestamptz not null default now()
-);
-
-insert into public.app_settings (id) values (true)
-on conflict (id) do nothing;
 
 alter table public.app_settings enable row level security;
 

@@ -6,26 +6,9 @@
 -- This snapshot reflects the database after the Foundations step only.
 -- Later tables (consultants, competencies, trainings, assessments, cases, plans)
 -- are added in later build-order steps and captured at the next re-baseline.
-
--- ============================================================
--- Helper: is the caller a superadmin?
--- SECURITY DEFINER so it can read the users table without tripping the table's
--- own RLS (which would otherwise recurse). Matches the caller by email claim.
--- ============================================================
-create or replace function public.is_superadmin()
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.users u
-    where lower(u.email) = lower(auth.jwt() ->> 'email')
-      and u.product_role = 'superadmin'
-      and u.is_active
-  );
-$$;
+--
+-- Object order matters: the users table is created before the is_superadmin()
+-- helper (which reads it), and the helper before the policies (which call it).
 
 -- ============================================================
 -- users
@@ -45,19 +28,6 @@ create table if not exists public.users (
 create unique index if not exists users_email_lower_idx
   on public.users (lower(email));
 
-alter table public.users enable row level security;
-
-drop policy if exists users_select_self on public.users;
-create policy users_select_self on public.users
-  for select
-  using (lower(email) = lower(auth.jwt() ->> 'email'));
-
-drop policy if exists users_all_superadmin on public.users;
-create policy users_all_superadmin on public.users
-  for all
-  using (public.is_superadmin())
-  with check (public.is_superadmin());
-
 -- ============================================================
 -- app_settings (single row: AI provider and model)
 -- ============================================================
@@ -71,6 +41,43 @@ create table if not exists public.app_settings (
 
 insert into public.app_settings (id) values (true)
 on conflict (id) do nothing;
+
+-- ============================================================
+-- Helper: is the caller a superadmin?
+-- SECURITY DEFINER so it can read the users table without tripping the table's
+-- own RLS (which would otherwise recurse). Matches the caller by email claim.
+-- Created after users exists.
+-- ============================================================
+create or replace function public.is_superadmin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.users u
+    where lower(u.email) = lower(auth.jwt() ->> 'email')
+      and u.product_role = 'superadmin'
+      and u.is_active
+  );
+$$;
+
+-- ============================================================
+-- Row Level Security and policies (created after the helper exists)
+-- ============================================================
+alter table public.users enable row level security;
+
+drop policy if exists users_select_self on public.users;
+create policy users_select_self on public.users
+  for select
+  using (lower(email) = lower(auth.jwt() ->> 'email'));
+
+drop policy if exists users_all_superadmin on public.users;
+create policy users_all_superadmin on public.users
+  for all
+  using (public.is_superadmin())
+  with check (public.is_superadmin());
 
 alter table public.app_settings enable row level security;
 

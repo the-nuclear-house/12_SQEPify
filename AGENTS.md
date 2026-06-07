@@ -54,6 +54,11 @@ So when you hand work over: give exact SQL ready to paste, give whole files or c
 copy-and-paste blocks rather than partial changes to apply by hand, and state plainly
 where each piece goes and in what order.
 
+Always deliver changed repo files as a single zip that preserves the folder structure
+and contains only the files that changed, so the maintainer can extract it straight
+over the repo and push in one go. Never hand over loose individual files to be placed
+by hand, and never make the maintainer hunt for where a file belongs.
+
 ## Secrets
 
 No secret ever goes in the repo or in a committed file. The frontend uses only
