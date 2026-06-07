@@ -1,5 +1,6 @@
 import { useAuth } from './AuthProvider';
 import { isSupabaseConfigured } from '../lib/supabase';
+import Logo from '../components/Logo';
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -7,7 +8,10 @@ export default function Login() {
   return (
     <div className="centre">
       <div className="centre-card">
-        <div className="mark">
+        <span className="centre-logo">
+          <Logo size={56} />
+        </span>
+        <div className="centre-word">
           SQEP<span className="em">ify</span>
         </div>
         <p>

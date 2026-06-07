@@ -1,4 +1,5 @@
 import { useAuth } from '../auth/AuthProvider';
+import Logo from '../components/Logo';
 
 export default function NoAccess() {
   const { user, session, signOut } = useAuth();
@@ -7,7 +8,10 @@ export default function NoAccess() {
   return (
     <div className="centre">
       <div className="centre-card">
-        <div className="mark">
+        <span className="centre-logo">
+          <Logo size={56} />
+        </span>
+        <div className="centre-word">
           SQEP<span className="em">ify</span>
         </div>
         <p>
