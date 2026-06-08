@@ -7,8 +7,7 @@ import type {
 } from '../lib/types';
 
 type EditTarget =
-  | { kind: 'category' | 'subcategory'; id: string }
-  | { kind: 'competency'; id: string }
+  | { kind: 'category' | 'subcategory' | 'competency'; id: string }
   | null;
 
 export default function Competencies() {
@@ -19,7 +18,6 @@ export default function Competencies() {
   const [error, setError] = useState<string | null>(null);
 
   const [newCat, setNewCat] = useState('');
-  // which "add" input is open, keyed by a string token
   const [adder, setAdder] = useState<string | null>(null);
   const [adderText, setAdderText] = useState('');
   const [adderDesc, setAdderDesc] = useState('');
@@ -84,24 +82,29 @@ export default function Competencies() {
     run(supabase.from('competency_categories').insert({ name: newCat.trim() }));
     setNewCat('');
   };
-  const addSubcategory = (categoryId: string) =>
+  const addSubcategory = (categoryId: string) => {
+    if (!adderText.trim()) return;
     run(
       supabase
         .from('competency_subcategories')
         .insert({ category_id: categoryId, name: adderText.trim() }),
     );
-  const addCompetency = (categoryId: string, subcategoryId: string | null) =>
+  };
+  const addCompetency = (categoryId: string, subcategoryId: string | null) => {
+    if (!adderText.trim() || !adderDesc.trim()) return;
     run(
       supabase.from('competencies').insert({
         category_id: categoryId,
         subcategory_id: subcategoryId,
         name: adderText.trim(),
-        description: adderDesc.trim() || null,
+        description: adderDesc.trim(),
       }),
     );
+  };
 
   const saveEdit = () => {
     if (!edit || !editName.trim()) return;
+    if (edit.kind === 'competency' && !editDesc.trim()) return;
     const table =
       edit.kind === 'category'
         ? 'competency_categories'
@@ -109,7 +112,7 @@ export default function Competencies() {
           ? 'competency_subcategories'
           : 'competencies';
     const patch: Record<string, unknown> = { name: editName.trim() };
-    if (edit.kind === 'competency') patch.description = editDesc.trim() || null;
+    if (edit.kind === 'competency') patch.description = editDesc.trim();
     run(supabase.from(table).update(patch).eq('id', edit.id));
   };
 
@@ -130,22 +133,23 @@ export default function Competencies() {
     setEditDesc(desc ?? '');
   }
 
-  function CompetencyRow({ c }: { c: Competency }) {
+  // Plain render helpers (NOT nested components) so inputs keep focus while typing.
+  function competencyRow(c: Competency) {
     const editing = edit?.kind === 'competency' && edit.id === c.id;
     if (editing) {
       return (
-        <div className="comp-row editing">
+        <div className="comp-row editing" key={c.id}>
           <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Competency name" />
-          <input className="field" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description (optional)" />
+          <input className="field" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description" />
           <div className="tree-actions">
-            <button className="btn btn-sm btn-primary" onClick={saveEdit}>Save</button>
+            <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim() || !editDesc.trim()}>Save</button>
             <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
           </div>
         </div>
       );
     }
     return (
-      <div className="comp-row">
+      <div className="comp-row" key={c.id}>
         <div className="comp-name">
           {c.name}
           {c.description && <span className="comp-desc">{c.description}</span>}
@@ -158,19 +162,19 @@ export default function Competencies() {
     );
   }
 
-  function AddCompetencyRow({ categoryId, subcategoryId }: { categoryId: string; subcategoryId: string | null }) {
+  function addCompetencyRow(categoryId: string, subcategoryId: string | null) {
     const token = `comp:${subcategoryId ?? categoryId}`;
     if (adder !== token) {
       return (
-        <button className="link-btn add" onClick={() => { resetAdder(); setAdder(token); }}>+ Add competency</button>
+        <button className="link-btn add" key={token} onClick={() => { resetAdder(); setAdder(token); }}>+ Add competency</button>
       );
     }
     return (
-      <div className="comp-row editing">
-        <input className="field" autoFocus value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Competency name" />
-        <input className="field" value={adderDesc} onChange={(e) => setAdderDesc(e.target.value)} placeholder="Description (optional)" />
+      <div className="comp-row editing" key={token}>
+        <input className="field" value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Competency name" />
+        <input className="field" value={adderDesc} onChange={(e) => setAdderDesc(e.target.value)} placeholder="Description" />
         <div className="tree-actions">
-          <button className="btn btn-sm btn-primary" onClick={() => addCompetency(categoryId, subcategoryId)} disabled={!adderText.trim()}>Add</button>
+          <button className="btn btn-sm btn-primary" onClick={() => addCompetency(categoryId, subcategoryId)} disabled={!adderText.trim() || !adderDesc.trim()}>Add</button>
           <button className="btn btn-sm btn-ghost" onClick={resetAdder}>Cancel</button>
         </div>
       </div>
@@ -208,7 +212,7 @@ export default function Competencies() {
                     <div className="comp-row editing" style={{ flex: 1 }}>
                       <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} />
                       <div className="tree-actions">
-                        <button className="btn btn-sm btn-primary" onClick={saveEdit}>Save</button>
+                        <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim()}>Save</button>
                         <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
                       </div>
                     </div>
@@ -223,8 +227,8 @@ export default function Competencies() {
                   )}
                 </div>
 
-                {directComps.map((c) => <CompetencyRow key={c.id} c={c} />)}
-                <AddCompetencyRow categoryId={cat.id} subcategoryId={null} />
+                {directComps.map((c) => competencyRow(c))}
+                {addCompetencyRow(cat.id, null)}
 
                 {catSubs.map((sub) => {
                   const subComps = compsBySub[sub.id] ?? [];
@@ -236,7 +240,7 @@ export default function Competencies() {
                           <div className="comp-row editing" style={{ flex: 1 }}>
                             <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} />
                             <div className="tree-actions">
-                              <button className="btn btn-sm btn-primary" onClick={saveEdit}>Save</button>
+                              <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim()}>Save</button>
                               <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
                             </div>
                           </div>
@@ -250,15 +254,15 @@ export default function Competencies() {
                           </>
                         )}
                       </div>
-                      {subComps.map((c) => <CompetencyRow key={c.id} c={c} />)}
-                      <AddCompetencyRow categoryId={cat.id} subcategoryId={sub.id} />
+                      {subComps.map((c) => competencyRow(c))}
+                      {addCompetencyRow(cat.id, sub.id)}
                     </div>
                   );
                 })}
 
                 {adder === `sub:${cat.id}` ? (
                   <div className="comp-row editing">
-                    <input className="field" autoFocus value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Subcategory name" />
+                    <input className="field" value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Subcategory name" />
                     <div className="tree-actions">
                       <button className="btn btn-sm btn-primary" onClick={() => addSubcategory(cat.id)} disabled={!adderText.trim()}>Add</button>
                       <button className="btn btn-sm btn-ghost" onClick={resetAdder}>Cancel</button>
