@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Competencies from './pages/Competencies';
 import Trainings from './pages/Trainings';
 import Consultants from './pages/Consultants';
+import ConsultantProfile from './pages/ConsultantProfile';
 import System from './pages/System';
 import NoAccess from './pages/NoAccess';
 import NotFound from './pages/NotFound';
@@ -29,9 +30,17 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="competencies" element={<Competencies />} />
+            <Route
+              path="competencies"
+              element={
+                <RequireRole allow={['superadmin', 'technical_director']}>
+                  <Competencies />
+                </RequireRole>
+              }
+            />
             <Route path="trainings" element={<Trainings />} />
             <Route path="consultants" element={<Consultants />} />
+            <Route path="consultants/:id" element={<ConsultantProfile />} />
             <Route
               path="system"
               element={

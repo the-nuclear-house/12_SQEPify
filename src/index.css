@@ -859,3 +859,38 @@ button {
 }
 .modal-back:hover { color: var(--text); }
 @media (max-width: 560px) { .tile-grid { grid-template-columns: 1fr; } }
+
+/* Competency taxonomy editor */
+.comp-cat { margin-bottom: 16px; }
+.comp-cat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.comp-cat-head h2 { margin: 0; }
+.comp-sub {
+  margin: 10px 0 6px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border-soft);
+}
+.comp-sub-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 4px; }
+.comp-sub-name { font-weight: 600; color: var(--text); font-size: 14px; }
+.comp-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-soft);
+}
+.comp-row:last-child { border-bottom: none; }
+.comp-row.editing { flex-wrap: wrap; align-items: stretch; }
+.comp-row.editing .field { flex: 1 1 200px; margin-bottom: 0; }
+.comp-name { font-size: 14px; color: var(--text); }
+.comp-desc { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.tree-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.link-btn {
+  border: none; background: transparent; color: var(--text-muted);
+  font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 6px;
+}
+.link-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.link-btn.danger:hover { color: var(--danger); }
+.link-btn.add { color: var(--accent); padding-left: 0; margin-top: 8px; display: inline-block; }
+.link-btn.add.sub { margin-top: 10px; }
+.add-category label {
+  display: block; font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 10px;
+}
+.add-category .field { margin-bottom: 0; }

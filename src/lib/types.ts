@@ -69,3 +69,28 @@ export interface Trainer {
   is_active: boolean;
   created_at: string;
 }
+
+export interface CompetencyCategory {
+  id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface CompetencySubcategory {
+  id: string;
+  category_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface Competency {
+  id: string;
+  category_id: string;
+  subcategory_id: string | null;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}

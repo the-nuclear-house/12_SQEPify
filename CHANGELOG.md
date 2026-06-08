@@ -6,6 +6,78 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Competency taxonomy (categories, subcategories, competencies)
+
+**What and why.** Build-order step 3: the competency library. Three tables form a
+category, optional subcategory, then competency hierarchy. A competency always has a
+category and may optionally sit under a subcategory. Deleting a category removes
+everything beneath it; deleting a subcategory keeps its competencies under the category.
+The Nuclear Competencies page is a staff-only editor over these tables. Content is added
+later from the reference material.
+
+**Access in plain English.** Any signed-in user can read the library (names are needed
+elsewhere in the app). Only staff (superadmins and Technical Directors) can add, rename,
+or delete anything.
+
+**SQL (safe to re-run):**
+
+```sql
+create table if not exists public.competency_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.competency_subcategories (
+  id uuid primary key default gen_random_uuid(),
+  category_id uuid not null references public.competency_categories(id) on delete cascade,
+  name text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.competencies (
+  id uuid primary key default gen_random_uuid(),
+  category_id uuid not null references public.competency_categories(id) on delete cascade,
+  subcategory_id uuid references public.competency_subcategories(id) on delete set null,
+  name text not null,
+  description text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists competency_subcategories_category on public.competency_subcategories(category_id);
+create index if not exists competencies_category on public.competencies(category_id);
+create index if not exists competencies_subcategory on public.competencies(subcategory_id);
+
+alter table public.competency_categories enable row level security;
+alter table public.competency_subcategories enable row level security;
+alter table public.competencies enable row level security;
+
+drop policy if exists comp_cat_read on public.competency_categories;
+create policy comp_cat_read on public.competency_categories for select using (auth.role() = 'authenticated');
+drop policy if exists comp_cat_write on public.competency_categories;
+create policy comp_cat_write on public.competency_categories for all using (public.is_staff()) with check (public.is_staff());
+
+drop policy if exists comp_sub_read on public.competency_subcategories;
+create policy comp_sub_read on public.competency_subcategories for select using (auth.role() = 'authenticated');
+drop policy if exists comp_sub_write on public.competency_subcategories;
+create policy comp_sub_write on public.competency_subcategories for all using (public.is_staff()) with check (public.is_staff());
+
+drop policy if exists comp_read on public.competencies;
+create policy comp_read on public.competencies for select using (auth.role() = 'authenticated');
+drop policy if exists comp_write on public.competencies;
+create policy comp_write on public.competencies for all using (public.is_staff()) with check (public.is_staff());
+```
+
+**Undo:**
+
+```sql
+drop table if exists public.competencies;
+drop table if exists public.competency_subcategories;
+drop table if exists public.competency_categories;
+```
+
+---
+
 ## Trainer management opened to Technical Directors
 
 **What and why.** Trainer management is a Technical Director responsibility, not just a
