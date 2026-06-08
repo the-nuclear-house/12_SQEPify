@@ -6,6 +6,69 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Approved trainers registry
+
+**What and why.** Adds `public.trainers`, the registry of who may deliver a training:
+Technical Directors, consultants, or external providers. A training in the catalogue
+(built next) may only list deliverers from here. Also adds `is_staff()`, a helper that
+is true for an active superadmin or Technical Director, used for read access.
+
+**Access in plain English.** Staff (superadmins and Technical Directors) can read the
+registry. Only superadmins can add or remove trainers for now, because adding a trainer
+needs the full user and consultant lists, which only superadmins can currently read.
+Opening management to Technical Directors is a later, deliberate change.
+
+**SQL (safe to re-run):**
+
+```sql
+create or replace function public.is_staff()
+returns boolean language sql security definer set search_path = public as $$
+  select exists (
+    select 1 from public.users u
+    where lower(u.email) = lower(auth.jwt() ->> 'email')
+      and u.product_role in ('superadmin','technical_director')
+      and u.is_active
+  );
+$$;
+
+create table if not exists public.trainers (
+  id            uuid primary key default gen_random_uuid(),
+  kind          text not null check (kind in ('technical_director','consultant','external')),
+  user_id       uuid,
+  consultant_id text,
+  display_name  text not null,
+  company_name  text,
+  contact_name  text,
+  contact_email text,
+  contact_phone text,
+  notes         text,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now()
+);
+create unique index if not exists trainers_user_unique on public.trainers (user_id) where user_id is not null;
+create unique index if not exists trainers_consultant_unique on public.trainers (consultant_id) where consultant_id is not null;
+
+alter table public.trainers enable row level security;
+
+drop policy if exists trainers_select_staff on public.trainers;
+create policy trainers_select_staff on public.trainers for select using (public.is_staff());
+
+drop policy if exists trainers_write_superadmin on public.trainers;
+create policy trainers_write_superadmin on public.trainers
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+```
+
+**Undo:**
+
+```sql
+drop policy if exists trainers_write_superadmin on public.trainers;
+drop policy if exists trainers_select_staff on public.trainers;
+drop table if exists public.trainers;
+drop function if exists public.is_staff();
+```
+
+---
+
 ## Auto-provision consultant logins from the sync
 
 **What and why.** Consultants pulled from the Control Room should be able to sign in to

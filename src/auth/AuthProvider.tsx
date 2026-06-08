@@ -16,6 +16,7 @@ interface AuthState {
   user: AppUser | null;
   loading: boolean;
   signIn: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -93,6 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             scopes: 'openid profile email',
           },
         });
+      },
+      signInWithEmail: async (email: string, password: string) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        return { error: error ? error.message : null };
       },
       signOut: async () => {
         await supabase.auth.signOut();

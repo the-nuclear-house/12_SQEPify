@@ -194,3 +194,46 @@ begin
     and c.is_active = false;
 end;
 $$;
+
+-- ============================================================
+-- is_staff(): caller is a superadmin or a technical director (active)
+-- ============================================================
+create or replace function public.is_staff()
+returns boolean language sql security definer set search_path = public as $$
+  select exists (
+    select 1 from public.users u
+    where lower(u.email) = lower(auth.jwt() ->> 'email')
+      and u.product_role in ('superadmin','technical_director')
+      and u.is_active
+  );
+$$;
+
+-- ============================================================
+-- trainers (approved trainers registry: TDs, consultants, external providers)
+-- A training may only list deliverers that appear here.
+-- ============================================================
+create table if not exists public.trainers (
+  id            uuid primary key default gen_random_uuid(),
+  kind          text not null check (kind in ('technical_director','consultant','external')),
+  user_id       uuid,
+  consultant_id text,
+  display_name  text not null,
+  company_name  text,
+  contact_name  text,
+  contact_email text,
+  contact_phone text,
+  notes         text,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now()
+);
+create unique index if not exists trainers_user_unique on public.trainers (user_id) where user_id is not null;
+create unique index if not exists trainers_consultant_unique on public.trainers (consultant_id) where consultant_id is not null;
+
+alter table public.trainers enable row level security;
+
+drop policy if exists trainers_select_staff on public.trainers;
+create policy trainers_select_staff on public.trainers for select using (public.is_staff());
+
+drop policy if exists trainers_write_superadmin on public.trainers;
+create policy trainers_write_superadmin on public.trainers
+  for all using (public.is_superadmin()) with check (public.is_superadmin());

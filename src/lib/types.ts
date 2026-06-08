@@ -28,3 +28,44 @@ export interface Consultant {
   left_at: string | null;
   updated_at: string;
 }
+
+export interface CompetencyScore {
+  competency: string;
+  current: number; // 0..5
+  target: number; // the SQEP bar, normally 4
+}
+
+export interface PlannedTraining {
+  id: string;
+  name: string;
+  competency: string;
+  fromLevel: number;
+  toLevel: number;
+  startMonth: number; // months from plan start
+  durationMonths: number;
+  status: 'done' | 'in_progress' | 'upcoming';
+}
+
+export interface ConsultantProfileData {
+  id: string;
+  name: string;
+  jobTitle: string | null;
+  technicalDirector: string | null;
+  competencies: CompetencyScore[];
+  trainings: PlannedTraining[];
+}
+
+export interface Trainer {
+  id: string;
+  kind: 'technical_director' | 'consultant' | 'external';
+  user_id: string | null;
+  consultant_id: string | null;
+  display_name: string;
+  company_name: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}

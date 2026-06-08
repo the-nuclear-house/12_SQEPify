@@ -10,6 +10,21 @@ arrives in later build-order steps and is added here as it is built.
 
 ---
 
+## trainers
+
+The registry of people and providers approved to deliver training. Each row is one of
+three kinds: a Technical Director (linked to a user), a consultant (linked to a
+consultant record), or an external provider (with company and contact details). A
+training in the catalogue may only list deliverers that appear here.
+
+**Who can read:** superadmins and Technical Directors (staff).
+
+**Who can write:** superadmins only, for now. Opening this to Technical Directors needs
+a small change to let them read the user and consultant lists used to pick trainers,
+which we can make when wanted.
+
+---
+
 ## users
 
 The list of people who may use SQEPify and the role each one holds. A person is
