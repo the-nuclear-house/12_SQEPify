@@ -1,9 +1,10 @@
 // =============================================================================
 // EDGE FUNCTION: parse-cv-nuclear
 // =============================================================================
-// Input  (POST JSON): { cv: { kind: 'pdf'|'image'|'text', data: string, media_type?: string },
-//                       competencies: [{ id, name, category?, subcategory? }] }
-//          - pdf/image data is base64 (no data: prefix). text is plain text (e.g. a pasted CV
+// Input  (POST JSON): { competencies: [{ id, name, category?, subcategory? }],
+//                       and ONE of: file_base64 + media_type | text | url }
+//          - file_base64 is the uploaded file as base64 (no data: prefix); PDF, Word (.docx)
+//            and images (jpeg/png/gif/webp) are supported. text is a pasted CV. url is a link.
 //            or text extracted from a .docx in the browser via mammoth).
 // Output (JSON): { results: [{ competency_id, level, evidence }], provider }
 //          - level is 1..5 on SQEPify's scale. Only competencies the CV evidences are returned.
@@ -14,6 +15,7 @@
 // =============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import * as mammoth from 'npm:mammoth@1.6.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -234,10 +236,68 @@ serve(async (req) => {
   let body: any
   try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) }
 
-  const cv = body?.cv
   const competencies = Array.isArray(body?.competencies) ? body.competencies : []
-  if (!cv || !cv.kind || !cv.data) return new Response(JSON.stringify({ error: 'Missing cv' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   if (competencies.length === 0) return new Response(JSON.stringify({ error: 'Missing competencies' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+  const { text, file_base64, media_type, url } = body || {}
+  if (!text && !file_base64 && !url) {
+    return new Response(JSON.stringify({ error: 'Provide a CV file, text, or a URL to parse' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // Build the CV content (proven dispatch from the Control Room's parse-requirement).
+  let extractedText = ''
+  let pdf: { data: string } | undefined
+  let images: { media_type: string; data: string }[] | undefined
+  try {
+    if (url) {
+      const pageResponse = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      if (!pageResponse.ok) {
+        return new Response(JSON.stringify({ error: `Failed to fetch URL: ${pageResponse.status} ${pageResponse.statusText}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const html = await pageResponse.text()
+      const textContent = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+        .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&#\d+;/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 15000)
+      if (textContent.length < 50) {
+        return new Response(JSON.stringify({ error: 'Could not extract meaningful content from the URL. The page may require login or JavaScript rendering.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      extractedText = `Content from ${url}:\n\n${textContent}`
+    } else if (file_base64 && media_type) {
+      const isDocx = media_type.includes('wordprocessingml') || media_type.includes('msword')
+      const isPdf = media_type === 'application/pdf'
+      const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(media_type)
+      if (isDocx) {
+        const buffer = Uint8Array.from(atob(file_base64), (c) => c.charCodeAt(0))
+        const result = await mammoth.convertToHtml({ buffer })
+        const plain = String(result.value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+        extractedText = `CV (Word document):\n\n${plain}`
+      } else if (isPdf) {
+        pdf = { data: file_base64 }
+      } else if (isImage) {
+        images = [{ media_type, data: file_base64 }]
+      } else {
+        return new Response(JSON.stringify({ error: 'Unsupported file type. Upload a PDF, Word document, or image, or paste the CV text.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+    } else if (text) {
+      extractedText = `CV:\n\n${String(text)}`
+    }
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: `Could not read the CV: ${err?.message || err}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
 
   const list = competencies.map((c: any) => `- ${c.id} | ${[c.category, c.subcategory, c.name].filter(Boolean).join(' / ')}`).join('\n')
 
@@ -248,15 +308,15 @@ ${LEVEL_GUIDE}
 The competency library (id | path):
 ${list}
 
-Task: read the CV${cv.kind === 'text' ? ' below' : ''} and, ONLY for competencies the CV genuinely evidences, estimate the level (1 to 5) the CV supports, with a one-line justification quoting or paraphrasing the relevant CV detail. Do not include competencies with no evidence. Do not recommend training or next steps. Be conservative: if the CV does not clearly support a level, do not inflate it.
+Task: read the CV provided and, ONLY for competencies the CV genuinely evidences, estimate the level (1 to 5) the CV supports, with a one-line justification quoting or paraphrasing the relevant CV detail. Do not include competencies with no evidence. Do not recommend training or next steps. Be conservative: if the CV does not clearly support a level, do not inflate it.
 
 Return JSON only, no markdown and no preamble, in exactly this shape:
 {"results":[{"competency_id":"<id from the library>","level":<1-5>,"evidence":"<short justification>"}]}
-${cv.kind === 'text' ? `\nCV:\n${cv.data}` : ''}`
+${extractedText ? `\n${extractedText}` : ''}`
 
   const callOpts: any = { prompt, maxTokens: 4000 }
-  if (cv.kind === 'pdf') callOpts.pdf = { data: cv.data }
-  else if (cv.kind === 'image') callOpts.images = [{ media_type: cv.media_type || 'image/png', data: cv.data }]
+  if (pdf) callOpts.pdf = pdf
+  if (images) callOpts.images = images
 
   let aiText: string
   let provider: string

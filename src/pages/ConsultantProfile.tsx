@@ -3,8 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import NuclearisationProcess from '../components/NuclearisationProcess';
+import StarRating from '../components/StarRating';
 import type {
-  Consultant, Role, Assessment, AssessmentRole, CompetencyScore, PlannedTraining,
+  Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
+  Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
+  CompetencyScore, PlannedTraining,
 } from '../lib/types';
 
 const STEPS = ['Set-up', 'Self-assessment', 'Validation', 'Plan', 'Nuclearised'];
@@ -140,6 +143,13 @@ export default function ConsultantProfile() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [comps, setComps] = useState<Competency[]>([]);
+  const [roleComps, setRoleComps] = useState<RoleCompetency[]>([]);
+  const [cats, setCats] = useState<CompetencyCategory[]>([]);
+  const [subs, setSubs] = useState<CompetencySubcategory[]>([]);
+  const [scores, setScores] = useState<AssessmentScore[]>([]);
+  const [cvRunning, setCvRunning] = useState(false);
+  const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,23 +162,35 @@ export default function ConsultantProfile() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [c, r, a] = await Promise.all([
+    const [c, r, a, k, rc, cat, sub] = await Promise.all([
       supabase.from('consultants').select('*').eq('id', id).maybeSingle(),
       supabase.from('roles').select('*').order('is_base', { ascending: false }).order('sort_order').order('name'),
       supabase.from('assessments').select('*').eq('consultant_id', id).neq('status', 'cancelled')
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('competencies').select('*'),
+      supabase.from('role_competencies').select('*'),
+      supabase.from('competency_categories').select('*'),
+      supabase.from('competency_subcategories').select('*'),
     ]);
-    const err = c.error || r.error || a.error;
+    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error;
     if (err) { setError(err.message); setLoading(false); return; }
     setError(null);
     setConsultant((c.data as Consultant) ?? null);
     setRoles((r.data as Role[]) ?? []);
+    setComps((k.data as Competency[]) ?? []);
+    setRoleComps((rc.data as RoleCompetency[]) ?? []);
+    setCats((cat.data as CompetencyCategory[]) ?? []);
+    setSubs((sub.data as CompetencySubcategory[]) ?? []);
     const asmt = (a.data as Assessment) ?? null;
     setAssessment(asmt);
     if (asmt) {
-      const { data: ar } = await supabase.from('assessment_roles').select('*').eq('assessment_id', asmt.id);
+      const [{ data: ar }, { data: sc }] = await Promise.all([
+        supabase.from('assessment_roles').select('*').eq('assessment_id', asmt.id),
+        supabase.from('assessment_scores').select('*').eq('assessment_id', asmt.id),
+      ]);
       setSelected(((ar as AssessmentRole[]) ?? []).map((x) => x.role_id));
-    } else setSelected([]);
+      setScores((sc as AssessmentScore[]) ?? []);
+    } else { setSelected([]); setScores([]); }
     setLoading(false);
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -176,6 +198,29 @@ export default function ConsultantProfile() {
   const baseRole = useMemo(() => roles.find((r) => r.is_base) ?? null, [roles]);
   const otherRoles = useMemo(() => roles.filter((r) => !r.is_base), [roles]);
   const roleName = (rid: string) => roles.find((r) => r.id === rid)?.name ?? '';
+  const catById = useMemo(() => Object.fromEntries(cats.map((c) => [c.id, c.name])), [cats]);
+  const subById = useMemo(() => Object.fromEntries(subs.map((s) => [s.id, s.name])), [subs]);
+  const scoreByComp = useMemo(() => Object.fromEntries(scores.map((s) => [s.competency_id, s])), [scores]);
+
+  // Competencies in scope = Base role + selected roles, required level = highest across them.
+  const applicable = useMemo(() => {
+    const roleIds = new Set<string>([...(baseRole ? [baseRole.id] : []), ...selected]);
+    const required = new Map<string, number>();
+    roleComps.forEach((rc) => {
+      if (!roleIds.has(rc.role_id)) return;
+      required.set(rc.competency_id, Math.max(required.get(rc.competency_id) ?? 0, rc.required_level ?? TARGET));
+    });
+    return comps
+      .filter((c) => required.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        category: catById[c.category_id] ?? '',
+        subcategory: c.subcategory_id ? subById[c.subcategory_id] ?? '' : '',
+        required: required.get(c.id) ?? TARGET,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [comps, roleComps, selected, baseRole, catById, subById]);
   const name = consultant?.full_name
     || [consultant?.first_name, consultant?.last_name].filter(Boolean).join(' ')
     || consultant?.email || 'Consultant';
@@ -202,6 +247,63 @@ export default function ConsultantProfile() {
       const { error } = await supabase.from('assessment_roles').insert(selected.map((role_id) => ({ assessment_id: aid, role_id })));
       if (error) setError(error.message);
     }
+    setSaving(false); setModalStep(null); load();
+  }
+
+  function readFile(file: File): Promise<{ file_base64?: string; media_type?: string; text?: string }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const type = file.type || '';
+      const isTextLike = type.startsWith('text/') || /\.(txt|md)$/i.test(file.name);
+      reader.onerror = () => reject(new Error('Could not read the file.'));
+      if (isTextLike) {
+        reader.onload = () => resolve({ text: String(reader.result) });
+        reader.readAsText(file);
+      } else {
+        reader.onload = () => resolve({ file_base64: String(reader.result).split(',')[1] ?? '', media_type: type || 'application/octet-stream' });
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  async function runCv(file: File) {
+    if (!assessment) return;
+    if (applicable.length === 0) { setCvMsg('Add at least one role with competencies before running the CV.'); return; }
+    setCvRunning(true); setCvMsg(null); setError(null);
+    try {
+      const input = await readFile(file);
+      const { data, error } = await supabase.functions.invoke('parse-cv-nuclear', {
+        body: { ...input, competencies: applicable.map((c) => ({ id: c.id, name: c.name, category: c.category, subcategory: c.subcategory })) },
+      });
+      if (error) throw new Error(error.message || 'The CV function could not be reached.');
+      if (data?.error) throw new Error(data.error);
+      const results: Array<{ competency_id: string; level: number; evidence?: string }> = data?.results ?? [];
+      if (!Array.isArray(results) || results.length === 0) {
+        setCvMsg('The AI found no evidence for the competencies in scope. You can still send for self-assessment.');
+      } else {
+        const valid = new Set(applicable.map((c) => c.id));
+        const rows = results
+          .filter((r) => valid.has(r.competency_id) && typeof r.level === 'number')
+          .map((r) => ({ assessment_id: assessment.id, competency_id: r.competency_id, ai_level: Math.max(0, Math.min(5, Math.round(r.level))), note: r.evidence ?? null }));
+        if (rows.length) {
+          const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
+          if (upErr) throw new Error(upErr.message);
+        }
+        setCvMsg(`AI proposed levels for ${rows.length} competenc${rows.length === 1 ? 'y' : 'ies'}.`);
+        await load();
+      }
+    } catch (e) {
+      setCvMsg(e instanceof Error ? e.message : 'Something went wrong running the CV.');
+    } finally {
+      setCvRunning(false);
+    }
+  }
+
+  async function sendForSelf() {
+    if (!assessment) return;
+    setSaving(true); setError(null);
+    const { error } = await supabase.from('assessments').update({ status: 'self_assessment' }).eq('id', assessment.id);
+    if (error) setError(error.message);
     setSaving(false); setModalStep(null); load();
   }
 
@@ -291,7 +393,8 @@ export default function ConsultantProfile() {
           <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>Set-up</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
             <div className="modal-step">
-              <p className="muted">Choose the roles this consultant is assessed against. Base Nuclear always applies; add any role-based competencies on top. CV upload and AI assessment come next.</p>
+              <h3 className="modal-sub">1 · Roles</h3>
+              <p className="muted">Base Nuclear always applies; add any role-based competencies on top.</p>
               <div className="role-pick">
                 {baseRole && (
                   <label className="role-pick-row locked"><input type="checkbox" checked readOnly />
@@ -307,7 +410,46 @@ export default function ConsultantProfile() {
                   </label>
                 ))}
               </div>
-              <button className="btn btn-primary btn-block" onClick={saveSetup} disabled={saving}>{saving ? 'Saving…' : assessment ? 'Save roles' : 'Start assessment'}</button>
+              <button className="btn btn-primary btn-block" onClick={saveSetup} disabled={saving}>
+                {saving ? 'Saving…' : assessment ? 'Save roles' : 'Start assessment'}
+              </button>
+
+              {assessment && (
+                <>
+                  <h3 className="modal-sub">2 · CV assessment</h3>
+                  <p className="muted">Upload the consultant's CV. The AI reads it against the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} in scope and proposes a starting level for each. PDF, Word, image or text.</p>
+                  <label className={`cv-drop${cvRunning ? ' busy' : ''}`}>
+                    <input type="file" accept=".pdf,.doc,.docx,.txt,.md,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={cvRunning}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) runCv(f); e.target.value = ''; }} />
+                    <span>{cvRunning ? 'Reading the CV…' : 'Choose a CV file'}</span>
+                  </label>
+                  {cvMsg && <p className="muted cv-msg">{cvMsg}</p>}
+
+                  {scores.length > 0 && (
+                    <div className="proposed">
+                      <div className="proposed-head">Proposed levels</div>
+                      {applicable.filter((c) => scoreByComp[c.id]?.ai_level != null).map((c) => {
+                        const sc = scoreByComp[c.id];
+                        return (
+                          <div className="proposed-row" key={c.id}>
+                            <div className="proposed-name">
+                              {c.name}
+                              {sc?.note && <span className="proposed-note">{sc.note}</span>}
+                            </div>
+                            <StarRating value={sc?.ai_level ?? 0} readOnly showLabel={false} size="sm" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <h3 className="modal-sub">3 · Hand over</h3>
+                  <p className="muted">Send to the consultant for self-assessment. They review the proposed levels and rate themselves.</p>
+                  <button className="btn btn-primary btn-block" onClick={sendForSelf} disabled={saving}>
+                    {saving ? 'Sending…' : 'Send for self-assessment'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

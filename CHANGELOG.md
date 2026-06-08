@@ -1,3 +1,15 @@
+## parse-cv-nuclear: adopt the Control Room's proven file/URL dispatch
+
+**What and why.** Reworked the CV input to mirror the Control Room's `parse-requirement`
+dispatch, which handles uploads reliably. The function now accepts `{ competencies, and one of:
+file_base64 + media_type | text | url }` and supports PDF (handed to Anthropic), Word `.docx`
+(extracted server-side with `npm:mammoth@1.6.0`), images (jpeg/png/gif/webp), a pasted CV, and a
+URL (fetched with a browser User-Agent, stripped of scripts/styles/nav, capped at 15k chars).
+The frontend now sends `file_base64`/`media_type` (or `text` for .txt) instead of the old
+`cv:{kind,data}` shape. No database change.
+
+**Apply.** Redeploy the `parse-cv-nuclear` edge function (paste the updated file) and push the
+frontend. Word now works without any frontend library.
 ## Trainings: status + hours, drop the circular competency mapping
 
 **What and why.** A training no longer carries the "this competency from level X to Y" mapping,
