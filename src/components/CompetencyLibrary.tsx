@@ -34,6 +34,7 @@ export default function CompetencyLibrary() {
 
   const [modal, setModal] = useState<CompModal>(null);
   const [pathComp, setPathComp] = useState<Competency | null>(null);
+  const [view, setView] = useState<'category' | 'all'>('category');
   const [mName, setMName] = useState('');
   const [mDesc, setMDesc] = useState('');
 
@@ -74,6 +75,10 @@ export default function CompetencyLibrary() {
     });
     return m;
   }, [comps]);
+
+  const catById = useMemo(() => Object.fromEntries(cats.map((c) => [c.id, c.name])), [cats]);
+  const subById = useMemo(() => Object.fromEntries(subs.map((s) => [s.id, s.name])), [subs]);
+  const allComps = useMemo(() => [...comps].sort((a, b) => a.name.localeCompare(b.name)), [comps]);
 
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
     const { error } = await p;
@@ -153,13 +158,30 @@ export default function CompetencyLibrary() {
   return (
     <div>
       <div className="lib-toolbar">
-        <button className="btn btn-primary" onClick={openAddCategory}>+ Add category</button>
+        <div className="view-toggle">
+          <button className={view === 'category' ? 'active' : ''} onClick={() => setView('category')}>By category</button>
+          <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All competencies</button>
+        </div>
+        {view === 'category' && <button className="btn btn-primary" onClick={openAddCategory}>+ Add category</button>}
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}
 
       {loading ? (
         <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>
+      ) : view === 'all' ? (
+        allComps.length === 0 ? (
+          <div className="card"><p className="muted">No competencies yet.</p></div>
+        ) : (
+          <div className="comp-grid comp-grid-all">
+            {allComps.map((c) => (
+              <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
+                <span className="c-breadcrumb">{catById[c.category_id]}{c.subcategory_id && subById[c.subcategory_id] ? ` · ${subById[c.subcategory_id]}` : ''}</span>
+                <span className="c-name">{c.name}</span>
+              </button>
+            ))}
+          </div>
+        )
       ) : cats.length === 0 ? (
         <div className="card"><p className="muted">No categories yet. Use “Add category” to create the first one.</p></div>
       ) : (

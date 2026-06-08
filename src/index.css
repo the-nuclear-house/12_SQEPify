@@ -1034,7 +1034,7 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 }
 
 /* Competency Library/Roles split */
-.lib-toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.lib-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 
 /* Roles */
 .role-tabs .base-tag,
@@ -1459,3 +1459,16 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 }
 .empty-viz-title { font-weight: 600; color: var(--text-muted); }
 .empty-viz p { margin: 0; max-width: 280px; }
+
+/* Library view toggle + all-competencies grid */
+.view-toggle { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+.view-toggle button {
+  font: inherit; font-size: 13px; padding: 6px 14px; border: none; border-radius: 999px;
+  background: none; color: var(--text-muted); cursor: pointer;
+}
+.view-toggle button.active { background: var(--surface-3); color: var(--text); }
+.comp-grid-all { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.comp-card .c-breadcrumb {
+  display: block; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--brand-cyan); margin-bottom: 4px;
+}
