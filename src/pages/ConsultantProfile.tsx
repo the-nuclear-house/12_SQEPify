@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import NuclearisationProcess from '../components/NuclearisationProcess';
 import StarRating from '../components/StarRating';
+import FileDropzone from '../components/FileDropzone';
 import type {
   Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
   Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
@@ -464,11 +465,18 @@ export default function ConsultantProfile() {
               {setupWiz === 1 && (
                 <>
                   <p className="muted">Upload the consultant's CV. The AI reads it against the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} now in scope and proposes a starting level for each. PDF, Word, image or text.</p>
-                  <label className={`cv-drop${cvRunning ? ' busy' : ''}`}>
-                    <input type="file" accept=".pdf,.doc,.docx,.txt,.md,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={cvRunning}
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) runCv(f); e.target.value = ''; }} />
-                    <span>{cvRunning ? 'Reading the CV…' : 'Choose a CV file'}</span>
-                  </label>
+                  <FileDropzone
+                    className="cv-drop"
+                    accept=".pdf,.doc,.docx,.txt,.md,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    allowedExtensions={['pdf', 'doc', 'docx', 'txt', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp']}
+                    maxSizeMb={10}
+                    disabled={cvRunning}
+                    onFileSelected={runCv}
+                    onValidationError={(_t, m) => setCvMsg(m)}
+                    render={({ isDragging }) => (
+                      <span>{cvRunning ? 'Reading the CV…' : isDragging ? 'Drop the CV to upload' : 'Drop a CV here, or click to choose'}</span>
+                    )}
+                  />
                   {cvMsg && <p className="muted cv-msg">{cvMsg}</p>}
 
                   {scores.some((s) => s.ai_level != null) && (

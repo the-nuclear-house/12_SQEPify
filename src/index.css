@@ -1566,3 +1566,8 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 }
 .ms-opt:hover { background: var(--surface-3); }
 .ms-empty { padding: 10px; color: var(--text-faint); font-size: 13px; }
+
+/* CV drop zone states */
+.cv-drop { min-height: 84px; padding: 22px; }
+.cv-drop.dragging { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.fdz-disabled { pointer-events: none; opacity: 0.6; }
