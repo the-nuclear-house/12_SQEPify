@@ -10,11 +10,9 @@ arrives in later build-order steps and is added here as it is built.
 
 ---
 
-## trainings, training_competencies, training_deliverers
 
 A training has a title, a duration in days, optional notes, and one or more deliverers
 drawn from the approved trainers registry (`training_deliverers`). It addresses one or more
-competencies, each with its own star band, held in `training_competencies` (competency,
 from-star, to-star). A training therefore can lift several capabilities at once. These
 bands are what let the assessment later match a person's gaps to the right trainings.
 
@@ -148,7 +146,6 @@ service role.
 The learning path for a competency. One row per (competency, level 1 to 5) holding `actions`
 (what to do to reach that level) and `verification` (how it is evidenced). Levels use the
 same five-star scale as everywhere else; level 1 (no knowledge) carries no path. Which
-trainings reach a level is derived from `training_competencies`, not stored here. Read and
 write are staff-only (`is_staff()`).
 
 ## role_competencies.required_level
@@ -182,3 +179,8 @@ client reads three keys in one request: `ai_primary_provider` (anthropic|openai)
 updates the string here, no code change. Selectable by any authenticated user; written by
 superadmin only. The provider API keys themselves are never here; they live as edge-function
 secrets (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+
+## assessment_scores
+One row per (assessment, competency). `ai_level` = AI's CV-derived proposal, `self_level` =
+consultant's self-assessment, `validated_level` = TD's locked level, `note` = evidence/comment.
+All levels 0–5 (0 = not assessed). RLS: staff read/write all; consultant read/write own by email.

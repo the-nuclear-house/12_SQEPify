@@ -1,3 +1,40 @@
+## Trainings: status + hours, drop the circular competency mapping
+
+**What and why.** A training no longer carries the "this competency from level X to Y" mapping,
+which duplicated and went circular against the learning path. The learning path on each
+competency card now owns which trainings reach which level. So the `training_competencies`
+table is removed. Trainings instead gain a `status` of `active` or `required` (required means
+the training is needed but not built yet; its card shows red), and duration moves from days to
+`duration_hours`.
+
+**SQL (safe to re-run).**
+```sql
+alter table public.trainings add column if not exists status text not null default 'active';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'trainings_status_chk') then
+    alter table public.trainings add constraint trainings_status_chk check (status in ('active','required'));
+  end if;
+end $$;
+alter table public.trainings add column if not exists duration_hours int;
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'trainings' and column_name = 'duration_days') then
+    update public.trainings set duration_hours = round(duration_days * 8) where duration_hours is null and duration_days is not null;
+    alter table public.trainings drop column duration_days;
+  end if;
+end $$;
+drop table if exists public.training_competencies;
+```
+
+**Undo.** Re-add `duration_days numeric` and `status`/`duration_hours` can be dropped; the
+`training_competencies` data cannot be restored once dropped.
+```sql
+alter table public.trainings add column if not exists duration_days numeric;
+update public.trainings set duration_days = duration_hours / 8.0 where duration_days is null and duration_hours is not null;
+alter table public.trainings drop column if exists duration_hours;
+alter table public.trainings drop constraint if exists trainings_status_chk;
+alter table public.trainings drop column if exists status;
+```
+
 ## Assessment scores table (assessment_scores)
 
 **What and why.** A per-competency scores table holding the three levels each competency

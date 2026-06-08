@@ -114,7 +114,8 @@ export interface RoleCompetency {
 export interface Training {
   id: string;
   title: string;
-  duration_days: number | null;
+  duration_hours: number | null;
+  status: string;
   notes: string | null;
   sort_order: number;
   created_at: string;
@@ -167,4 +168,13 @@ export interface Assessment {
 export interface AssessmentRole {
   assessment_id: string;
   role_id: string;
+}
+
+export interface AssessmentScore {
+  assessment_id: string;
+  competency_id: string;
+  ai_level: number | null;
+  self_level: number | null;
+  validated_level: number | null;
+  note: string | null;
 }

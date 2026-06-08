@@ -1472,3 +1472,35 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
   display: block; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--brand-cyan); margin-bottom: 4px;
 }
+
+/* Set-up modal: CV upload + proposed levels */
+.modal-sub { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--text); }
+.modal-sub:first-of-type { margin-top: 4px; }
+.cv-drop {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: 16px; margin: 8px 0; cursor: pointer; color: var(--text-muted);
+  background: var(--surface-2); transition: border-color .15s, color .15s;
+}
+.cv-drop:hover { border-color: var(--accent); color: var(--accent); }
+.cv-drop.busy { opacity: .7; cursor: progress; }
+.cv-drop input { display: none; }
+.cv-msg { margin: 4px 0 0; }
+.proposed { margin: 10px 0 4px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }
+.proposed-head { padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-2); }
+.proposed-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--border-soft); }
+.proposed-name { font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.proposed-note { font-size: 11px; color: var(--text-faint); line-height: 1.3; }
+
+/* Training status: card, pill, toggle; numeric input without spinners */
+.training-card.required { border-color: var(--danger); background: rgba(207, 90, 10, 0.10); }
+.status-pill { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.status-pill.act { color: var(--brand-green); background: rgba(132, 195, 65, 0.14); }
+.status-pill.req { color: var(--danger); background: rgba(207, 90, 10, 0.16); }
+.training-notes { margin: 10px 0 0; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+.status-toggle { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px; margin: 2px 0; }
+.status-toggle button { font: inherit; font-size: 13px; padding: 6px 16px; border: none; border-radius: 999px; background: none; color: var(--text-muted); cursor: pointer; }
+.status-toggle button.active { background: var(--surface-3); color: var(--text); }
+.status-toggle button.req.active { background: rgba(207, 90, 10, 0.18); color: var(--danger); }
+.no-spin::-webkit-outer-spin-button, .no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spin { -moz-appearance: textfield; appearance: textfield; }

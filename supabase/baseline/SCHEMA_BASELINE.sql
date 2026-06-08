@@ -408,21 +408,14 @@ create policy clt_write on public.competency_level_trainings for all using (publ
 create table if not exists public.trainings (
   id uuid primary key default gen_random_uuid(),
   title text not null,
-  duration_days numeric,
+  duration_hours int,
+  status text not null default 'active' check (status in ('active','required')),
   notes text,
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
-
--- A training addresses one or more competencies, each with its own star band.
-create table if not exists public.training_competencies (
-  training_id uuid not null references public.trainings(id) on delete cascade,
-  competency_id uuid not null references public.competencies(id) on delete cascade,
-  from_level int not null check (from_level between 1 and 4),
-  to_level int not null check (to_level between 2 and 5),
-  primary key (training_id, competency_id),
-  check (from_level < to_level)
-);
+-- The competency-to-training mapping lives in the learning path
+-- (competency_level_trainings), not on the training itself.
 
 create table if not exists public.training_deliverers (
   training_id uuid not null references public.trainings(id) on delete cascade,
@@ -440,11 +433,6 @@ drop policy if exists td_read on public.training_deliverers;
 create policy td_read on public.training_deliverers for select using (public.is_staff());
 drop policy if exists td_write on public.training_deliverers;
 create policy td_write on public.training_deliverers for all using (public.is_staff()) with check (public.is_staff());
-drop policy if exists tc_read on public.training_competencies;
-create policy tc_read on public.training_competencies for select using (public.is_staff());
-drop policy if exists tc_write on public.training_competencies;
-create policy tc_write on public.training_competencies for all using (public.is_staff()) with check (public.is_staff());
-alter table public.training_competencies enable row level security;
 
 -- =========================================================================
 -- Consultant assessments (the consultant-page workflow)
@@ -481,6 +469,32 @@ drop policy if exists ar_staff_all on public.assessment_roles;
 create policy ar_staff_all on public.assessment_roles for all using (public.is_staff()) with check (public.is_staff());
 drop policy if exists ar_own_read on public.assessment_roles;
 create policy ar_own_read on public.assessment_roles for select using (
+  exists (
+    select 1 from public.assessments a
+    join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email')
+  )
+);
+create table if not exists public.assessment_scores (
+  assessment_id uuid not null references public.assessments(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  ai_level int check (ai_level between 0 and 5),
+  self_level int check (self_level between 0 and 5),
+  validated_level int check (validated_level between 0 and 5),
+  note text,
+  primary key (assessment_id, competency_id)
+);
+alter table public.assessment_scores enable row level security;
+drop policy if exists as_staff_all on public.assessment_scores;
+create policy as_staff_all on public.assessment_scores for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists as_own_rw on public.assessment_scores;
+create policy as_own_rw on public.assessment_scores for all using (
+  exists (
+    select 1 from public.assessments a
+    join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email')
+  )
+) with check (
   exists (
     select 1 from public.assessments a
     join public.users u on u.consultant_id = a.consultant_id::text
