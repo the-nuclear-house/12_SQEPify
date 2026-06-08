@@ -266,9 +266,13 @@ export default function ConsultantProfile() {
   const rolesLabel = useMemo(() => ['Base Nuclear', ...selected.map(roleName)].filter(Boolean).join(', '), [selected, roles]);
 
   const progress = useMemo(() => {
-    const need = liveComps.reduce((s, c) => s + c.required, 0);
-    const got = liveComps.reduce((s, c) => s + Math.min(c.current, c.required), 0);
-    return need === 0 ? 0 : got / need;
+    if (liveComps.length === 0) return 0;
+    // Distance to the bar per competency: level 1 (no knowledge) = 0%, the required level = 100%.
+    const fracs = liveComps.map((c) => {
+      if (c.required <= 1) return c.current >= c.required ? 1 : 0;
+      return Math.max(0, Math.min(1, (c.current - 1) / (c.required - 1)));
+    });
+    return fracs.reduce((s, f) => s + f, 0) / fracs.length;
   }, [liveComps]);
   const pct = Math.round(progress * 100);
   const full = progress >= 1;
