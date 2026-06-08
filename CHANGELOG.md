@@ -6,6 +6,33 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Roles and the Base Nuclear role
+
+**What and why.** Build-order step: competencies are now split into Library (definitions)
+and Roles (groupings). Adds `roles` and `role_competencies`. Base Nuclear is seeded,
+always present, undeletable, and holds the standard competencies everyone needs. Database
+triggers enforce that a Base competency cannot be in another role and vice versa, that the
+Base role cannot be deleted or un-based, and that only one Base exists. Normal roles may
+share competencies. The Nuclear Competencies page gains a Library/Roles tab split; inside a
+role, competencies are grouped by category and subcategory, and the add browser greys out
+ineligible competencies with the reason.
+
+**Access in plain English.** Staff read and write roles. The Base role is protected.
+
+**SQL (safe to re-run):** see `supabase/baseline/SCHEMA_BASELINE.sql`, the roles section,
+or the block provided in chat.
+
+**Undo:**
+
+```sql
+drop table if exists public.role_competencies;
+drop table if exists public.roles;
+drop function if exists public.enforce_role_exclusivity();
+drop function if exists public.protect_base_role();
+```
+
+---
+
 ## Competency hierarchy enforced + star level descriptors
 
 **What and why.** Tightened the competency model on TD feedback. The app now enforces the
