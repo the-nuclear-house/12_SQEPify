@@ -562,3 +562,11 @@ button {
   color: var(--brand-green);
   background: rgba(132, 195, 65, 0.14);
 }
+
+.nav-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  align-self: center;
+  margin: 0 8px;
+}

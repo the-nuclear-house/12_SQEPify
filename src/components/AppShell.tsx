@@ -12,9 +12,9 @@ interface Tab {
 const ALL: ProductRole[] = ['superadmin', 'technical_director', 'consultant'];
 const TD: ProductRole[] = ['superadmin', 'technical_director'];
 
-// Primary functions only. System lives behind the gear, not in the main nav.
-const TABS: Tab[] = [
-  { to: '/', label: 'Dashboard', roles: ALL },
+// Overview sits apart from the core working areas.
+const OVERVIEW: Tab[] = [{ to: '/', label: 'Dashboard', roles: ALL }];
+const CORE: Tab[] = [
   { to: '/competencies', label: 'Nuclear Competencies', roles: TD },
   { to: '/trainings', label: 'Trainings', roles: TD },
   { to: '/consultants', label: 'Consultants', roles: TD },
@@ -36,6 +36,18 @@ function initials(name: string | null | undefined, email: string | undefined): s
   return (email?.[0] ?? '?').toUpperCase();
 }
 
+function Pill({ to, label }: { to: string; label: string }) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) => (isActive ? 'pill active' : 'pill')}
+    >
+      {label}
+    </NavLink>
+  );
+}
+
 function GearIcon() {
   return (
     <svg
@@ -55,7 +67,8 @@ function GearIcon() {
 export default function AppShell() {
   const { user, signOut } = useAuth();
   const role = user?.product_role ?? 'consultant';
-  const tabs = TABS.filter((t) => t.roles.includes(role));
+  const overview = OVERVIEW.filter((t) => t.roles.includes(role));
+  const core = CORE.filter((t) => t.roles.includes(role));
   const isSuperadmin = role === 'superadmin';
 
   return (
@@ -74,15 +87,12 @@ export default function AppShell() {
         </div>
 
         <nav className="navpills">
-          {tabs.map((t) => (
-            <NavLink
-              key={t.to}
-              to={t.to}
-              end={t.to === '/'}
-              className={({ isActive }) => (isActive ? 'pill active' : 'pill')}
-            >
-              {t.label}
-            </NavLink>
+          {overview.map((t) => (
+            <Pill key={t.to} to={t.to} label={t.label} />
+          ))}
+          {overview.length > 0 && core.length > 0 && <span className="nav-divider" />}
+          {core.map((t) => (
+            <Pill key={t.to} to={t.to} label={t.label} />
           ))}
         </nav>
 
