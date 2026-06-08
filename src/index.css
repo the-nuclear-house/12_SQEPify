@@ -1556,9 +1556,9 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .ms-control.static { cursor: default; }
 .ms-input { flex: 1; min-width: 100px; border: none; background: none; color: var(--text); font: inherit; outline: none; padding: 4px 2px; }
 .ms-menu {
-  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+  margin-top: 6px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  box-shadow: var(--shadow); max-height: 240px; overflow-y: auto; padding: 4px;
+  max-height: 190px; overflow-y: auto; padding: 4px;
 }
 .ms-opt {
   display: block; width: 100%; text-align: left; border: none; background: none;
