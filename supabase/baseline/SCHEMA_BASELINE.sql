@@ -157,3 +157,40 @@ alter table public.sync_state enable row level security;
 drop policy if exists sync_state_select_auth on public.sync_state;
 create policy sync_state_select_auth on public.sync_state
   for select using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- reconcile_consultant_users()
+-- Called at the end of each consultant sync. Creates a SQEPify login for each
+-- active consultant that has a company email, links existing logins, reactivates
+-- returning consultants, and switches off the logins of consultants who have left.
+-- Only ever affects consultant-role accounts; never a TD or superadmin.
+-- ============================================================
+create or replace function public.reconcile_consultant_users()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.users (email, full_name, product_role, is_active, consultant_id)
+  select c.company_email, c.full_name, 'consultant', true, c.id::text
+  from public.consultants c
+  where c.is_active
+    and c.company_email is not null
+    and not exists (select 1 from public.users u where lower(u.email) = lower(c.company_email));
+
+  update public.users u
+  set consultant_id = c.id::text,
+      is_active = case when u.product_role = 'consultant' then true else u.is_active end
+  from public.consultants c
+  where c.is_active and c.company_email is not null
+    and lower(u.email) = lower(c.company_email);
+
+  update public.users u
+  set is_active = false
+  from public.consultants c
+  where u.product_role = 'consultant'
+    and u.consultant_id = c.id::text
+    and c.is_active = false;
+end;
+$$;

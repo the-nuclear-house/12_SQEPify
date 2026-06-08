@@ -121,6 +121,10 @@ Deno.serve(async (req) => {
     .select('id');
   if (leftErr) return json({ error: 'Leaver update failed', detail: leftErr.message }, 500);
 
+  // Provision SQEPify logins for active consultants (by company email) and switch off
+  // the logins of those who have left. Best effort; does not fail the sync.
+  await admin.rpc('reconcile_consultant_users');
+
   // Record this successful run so the app can show when the last pull happened
   // (covers both manual and scheduled runs). Best effort; do not fail the sync if it errors.
   await admin.from('sync_state').upsert(

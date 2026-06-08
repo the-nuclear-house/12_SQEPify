@@ -28,6 +28,13 @@ The very first superadmin cannot be created through the app, because that would 
 superadmin to already exist. It is set once, directly in the database, as recorded in
 the changelog.
 
+Consultant logins are provisioned automatically. Each consultant sync creates a user
+for any active consultant who has a company email (role consultant, linked to their
+record), reactivates returning consultants, and switches off the login of anyone who
+has left the company. This only ever affects consultant accounts, never a Technical
+Director or superadmin. Consultants without a company email are not auto-created, since
+there is no address to match their Microsoft 365 sign in against.
+
 ---
 
 ## app_settings

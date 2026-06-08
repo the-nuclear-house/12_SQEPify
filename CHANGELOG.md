@@ -6,6 +6,63 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Auto-provision consultant logins from the sync
+
+**What and why.** Consultants pulled from the Control Room should be able to sign in to
+SQEPify without anyone creating their account by hand, since they already have a
+Microsoft 365 work account. This adds `reconcile_consultant_users()`, which the sync
+function calls at the end of each run. It creates a user for every active consultant
+that has a company email (role consultant, linked by `consultant_id`), links and
+reactivates returning consultants, and switches off the login of any consultant who has
+left (gone inactive in the cache). It only ever touches consultant-role accounts, never
+a Technical Director or superadmin. Consultants without a company email are not
+auto-created, as there is no address to match their sign in against.
+
+**Access in plain English.** Runs server-side as part of the sync; nothing for a user
+to do. A consultant's SQEPify access now tracks their employment in the Control Room.
+
+**SQL (safe to re-run):**
+
+```sql
+create or replace function public.reconcile_consultant_users()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.users (email, full_name, product_role, is_active, consultant_id)
+  select c.company_email, c.full_name, 'consultant', true, c.id::text
+  from public.consultants c
+  where c.is_active
+    and c.company_email is not null
+    and not exists (select 1 from public.users u where lower(u.email) = lower(c.company_email));
+
+  update public.users u
+  set consultant_id = c.id::text,
+      is_active = case when u.product_role = 'consultant' then true else u.is_active end
+  from public.consultants c
+  where c.is_active and c.company_email is not null
+    and lower(u.email) = lower(c.company_email);
+
+  update public.users u
+  set is_active = false
+  from public.consultants c
+  where u.product_role = 'consultant'
+    and u.consultant_id = c.id::text
+    and c.is_active = false;
+end;
+$$;
+```
+
+**Undo:**
+
+```sql
+drop function if exists public.reconcile_consultant_users();
+```
+
+---
+
 ## sync_state — record of the last successful sync
 
 **What and why.** Adds `public.sync_state`, a single row holding when the consultant
