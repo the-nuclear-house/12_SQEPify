@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Consultant } from '../lib/types';
 
@@ -83,7 +84,11 @@ export default function Consultants() {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id} className={c.is_active ? '' : 'is-left'}>
-                  <td>{c.full_name || '-'}</td>
+                  <td>
+                    <Link className="row-link" to={`/consultants/${c.id}`}>
+                      {c.full_name || '-'}
+                    </Link>
+                  </td>
                   <td className="mono-cell">{c.company_email || c.email}</td>
                   <td>{c.job_title || '-'}</td>
                   <td>{c.td_full_name || c.td_email || '-'}</td>
