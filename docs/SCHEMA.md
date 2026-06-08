@@ -38,3 +38,25 @@ OpenAI as failover). Edge functions read this server-side when they call the mod
 **Who can read:** any signed-in person.
 
 **Who can write:** only a superadmin.
+
+---
+
+## consultants
+
+A local cache of the consultants pulled from the Control Room's read-only feed,
+refreshed by the `sync-consultants` edge function. Keyed off the Control Room's own id.
+Holds each consultant's names, personal and company email, job title, status,
+engineering skills, and their reporting Technical Director (id, name and email). Company
+email is unique when present and is the first thing matched against a person's Microsoft
+365 login; personal email is the fallback.
+
+Leavers are kept as history: when someone is exited in the Control Room they stop
+appearing in the feed, and the sync marks them inactive with a left date rather than
+deleting them. Nothing in SQEPify is ever removed because a person left.
+
+**Who can read:** a superadmin reads everyone. A Technical Director reads the
+consultants whose Technical Director email matches their own. A person can read their
+own consultant record (matched on company email, then personal email).
+
+**Who can write:** no one through the app. Only the sync function writes, using the
+service role, so the cache only ever changes by pulling from the Control Room.

@@ -91,3 +91,50 @@ create policy app_settings_write_superadmin on public.app_settings
   for all
   using (public.is_superadmin())
   with check (public.is_superadmin());
+
+-- ============================================================
+-- consultants (local cache of active consultants from the Control Room feed)
+-- Keyed off the Control Room id. Leavers are kept as history (is_active=false),
+-- never deleted. Only the sync edge function writes here (service role).
+-- ============================================================
+create table if not exists public.consultants (
+  id                 uuid primary key,
+  full_name          text,
+  first_name         text,
+  last_name          text,
+  email              text not null,
+  company_email      text,
+  job_title          text,
+  status             text,
+  engineering_skills text[] not null default '{}',
+  td_id              uuid,
+  td_full_name       text,
+  td_email           text,
+  is_active          boolean not null default true,
+  first_seen_at      timestamptz not null default now(),
+  last_seen_at       timestamptz not null default now(),
+  left_at            timestamptz,
+  updated_at         timestamptz not null default now()
+);
+
+create unique index if not exists consultants_company_email_unique
+  on public.consultants (lower(company_email)) where company_email is not null;
+create index if not exists consultants_td_email_idx on public.consultants (lower(td_email));
+create index if not exists consultants_is_active_idx on public.consultants (is_active);
+
+alter table public.consultants enable row level security;
+
+drop policy if exists consultants_select_superadmin on public.consultants;
+create policy consultants_select_superadmin on public.consultants
+  for select using (public.is_superadmin());
+
+drop policy if exists consultants_select_td on public.consultants;
+create policy consultants_select_td on public.consultants
+  for select using (lower(td_email) = lower(auth.jwt() ->> 'email'));
+
+drop policy if exists consultants_select_self on public.consultants;
+create policy consultants_select_self on public.consultants
+  for select using (
+    lower(coalesce(company_email, '')) = lower(auth.jwt() ->> 'email')
+    or lower(email) = lower(auth.jwt() ->> 'email')
+  );

@@ -6,6 +6,77 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Consultants cache and Control Room sync
+
+**What and why.** Adds `public.consultants`, a local cache of active consultants pulled
+read-only from the Control Room feed, keyed off the Control Room's own `id`. The sync
+itself is an edge function, `sync-consultants` (see `supabase/functions/`), which is
+deployed separately by pasting into the Supabase dashboard and needs the secrets
+`CONTROL_ROOM_FEED_URL` and `CONTROL_ROOM_FEED_TOKEN`. Leavers are detected by absence
+from the feed and kept as history (`is_active = false` with a `left_at`), never deleted.
+
+**Access in plain English.** A superadmin reads all consultants; a Technical Director
+reads those whose TD email matches their own; a person can read their own consultant
+record (matched on company email, then personal email). No one writes through the app;
+only the sync function writes, using the service role.
+
+**SQL (safe to re-run):**
+
+```sql
+create table if not exists public.consultants (
+  id                 uuid primary key,
+  full_name          text,
+  first_name         text,
+  last_name          text,
+  email              text not null,
+  company_email      text,
+  job_title          text,
+  status             text,
+  engineering_skills text[] not null default '{}',
+  td_id              uuid,
+  td_full_name       text,
+  td_email           text,
+  is_active          boolean not null default true,
+  first_seen_at      timestamptz not null default now(),
+  last_seen_at       timestamptz not null default now(),
+  left_at            timestamptz,
+  updated_at         timestamptz not null default now()
+);
+
+create unique index if not exists consultants_company_email_unique
+  on public.consultants (lower(company_email)) where company_email is not null;
+create index if not exists consultants_td_email_idx on public.consultants (lower(td_email));
+create index if not exists consultants_is_active_idx on public.consultants (is_active);
+
+alter table public.consultants enable row level security;
+
+drop policy if exists consultants_select_superadmin on public.consultants;
+create policy consultants_select_superadmin on public.consultants
+  for select using (public.is_superadmin());
+
+drop policy if exists consultants_select_td on public.consultants;
+create policy consultants_select_td on public.consultants
+  for select using (lower(td_email) = lower(auth.jwt() ->> 'email'));
+
+drop policy if exists consultants_select_self on public.consultants;
+create policy consultants_select_self on public.consultants
+  for select using (
+    lower(coalesce(company_email, '')) = lower(auth.jwt() ->> 'email')
+    or lower(email) = lower(auth.jwt() ->> 'email')
+  );
+```
+
+**Undo:**
+
+```sql
+drop policy if exists consultants_select_self on public.consultants;
+drop policy if exists consultants_select_td on public.consultants;
+drop policy if exists consultants_select_superadmin on public.consultants;
+drop table if exists public.consultants;
+```
+
+---
+
 ## Foundations — users, roles and app settings
 
 **What and why.** The first database step. Creates the `users` table (who may use
