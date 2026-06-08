@@ -91,6 +91,7 @@ export interface Competency {
   subcategory_id: string | null;
   name: string;
   description: string | null;
+  level_descriptors: Record<string, string> | null;
   sort_order: number;
   created_at: string;
 }

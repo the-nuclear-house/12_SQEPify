@@ -12,14 +12,17 @@ arrives in later build-order steps and is added here as it is built.
 
 ## competency_categories, competency_subcategories, competencies
 
-The competency library, in three levels: a category, an optional subcategory beneath
-it, and the competencies themselves. A competency always belongs to a category and may
-optionally sit under a subcategory. Deleting a category removes everything beneath it;
+The competency library, in three levels: a category, a subcategory beneath it, and the
+competencies themselves. The app enforces the full chain: a competency sits under a
+subcategory, a subcategory under a category. Each competency also carries optional star
+level descriptors (`level_descriptors`, JSON keyed 1 to 5) that say what each star means
+for that specific skill, used later as the assessment anchors. Deleting a category removes everything beneath it;
 deleting a subcategory keeps its competencies, moving them up to sit directly under the
 category. This taxonomy is the backbone that trainings and assessments attach to.
 
-**Who can read:** any signed-in user, since competency names are needed across the app
-(for example on a consultant's own profile later).
+**Who can read:** staff (superadmins and Technical Directors) for now. This will be
+widened to a consultant for their own competency names when the consultant profile is
+built.
 
 **Who can write:** staff (superadmins and Technical Directors), through the editable
 Nuclear Competencies page.

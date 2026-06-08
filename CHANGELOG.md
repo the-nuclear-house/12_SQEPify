@@ -6,6 +6,52 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Competency hierarchy enforced + star level descriptors
+
+**What and why.** Tightened the competency model on TD feedback. The app now enforces the
+full chain (a competency only under a subcategory, a subcategory only under a category) so
+the structure reads cleanly, with subcategories shown as tabs inside a category. Added a
+`level_descriptors` JSON field to competencies so each skill can say what 1 to 5 stars
+actually mean for it; these are the anchors the assessment will use. Page redesigned for
+contrast: cyan category panels, subcategory tabs, green-edged competency cards.
+
+**Access in plain English.** No access change. One new optional field on competencies.
+
+**SQL (safe to re-run):**
+
+```sql
+alter table public.competencies add column if not exists level_descriptors jsonb;
+```
+
+**Undo:**
+
+```sql
+alter table public.competencies drop column if exists level_descriptors;
+```
+
+---
+
+## Fix: competency library not visible in the app
+
+**What and why.** The competency read rule used `auth.role() = 'authenticated'`, which did
+not reliably match in the live project, so the library loaded empty in the app even though
+the rows existed. Switched the three read policies to `public.is_staff()`, the same check
+the trainers list uses. Read is staff-only for now; it will widen for consultants when the
+consultant profile is built. `docs/SCHEMA.md` and the baseline updated.
+
+**SQL (safe to re-run):**
+
+```sql
+drop policy if exists comp_cat_read on public.competency_categories;
+create policy comp_cat_read on public.competency_categories for select using (public.is_staff());
+drop policy if exists comp_sub_read on public.competency_subcategories;
+create policy comp_sub_read on public.competency_subcategories for select using (public.is_staff());
+drop policy if exists comp_read on public.competencies;
+create policy comp_read on public.competencies for select using (public.is_staff());
+```
+
+---
+
 ## Competency taxonomy (categories, subcategories, competencies)
 
 **What and why.** Build-order step 3: the competency library. Three tables form a
