@@ -1276,16 +1276,23 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .lp-trainings { margin-top: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .lp-trainings-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin-right: 2px; }
 
-/* Required-level selector inside a role competency chip */
-.comp-chip .chip-level {
-  margin-left: 8px;
-  background: var(--surface-3);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  padding: 1px 4px;
-  cursor: pointer;
+/* Clickable star rating */
+.star-rate { display: inline-flex; align-items: center; gap: 7px; }
+.star-rate-stars { display: inline-flex; }
+.star-btn {
+  background: none; border: none; padding: 0 1px; margin: 0; cursor: pointer;
+  line-height: 1; color: var(--star-off);
+  transition: color 0.08s ease, transform 0.08s ease;
 }
-.comp-chip .chip-level:focus { outline: none; border-color: var(--accent); }
+.star-btn:hover { transform: scale(1.18); }
+.star-btn.on { color: var(--star-on); }
+.star-btn:disabled { cursor: default; }
+.star-btn:disabled:hover { transform: none; }
+.star-rate-label {
+  font-family: var(--font-mono); color: var(--text-muted);
+  white-space: nowrap;
+}
+.star-rate-sm .star-btn { font-size: 14px; }
+.star-rate-sm .star-rate-label { font-size: 10px; min-width: 56px; }
+.star-rate-md .star-btn { font-size: 18px; }
+.star-rate-md .star-rate-label { font-size: 12px; min-width: 64px; }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import ConfirmDialog from './ConfirmDialog';
+import StarRating from './StarRating';
 import type {
   Competency,
   CompetencyCategory,
@@ -8,13 +9,6 @@ import type {
   Role,
   RoleCompetency,
 } from '../lib/types';
-
-const REQ_LEVELS = [
-  { n: 2, label: 'Awareness' },
-  { n: 3, label: 'Basic' },
-  { n: 4, label: 'SQEP' },
-  { n: 5, label: 'Expert' },
-];
 
 export default function CompetencyRoles() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -201,17 +195,7 @@ export default function CompetencyRoles() {
                           {items.map((c) => (
                             <span className="comp-chip" key={c.id}>
                               {c.name}
-                              <select
-                                className="chip-level"
-                                value={reqByComp[c.id] ?? 4}
-                                onChange={(e) => setLevel(c, Number(e.target.value))}
-                                title="Required level"
-                                aria-label={`Required level for ${c.name}`}
-                              >
-                                {REQ_LEVELS.map((l) => (
-                                  <option key={l.n} value={l.n}>{l.n}★ {l.label}</option>
-                                ))}
-                              </select>
+                              <StarRating value={reqByComp[c.id] ?? 4} onChange={(n) => setLevel(c, n)} />
                               <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
                             </span>
                           ))}
