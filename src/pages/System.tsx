@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Card from '../components/Card';
 
@@ -6,14 +6,43 @@ interface SyncResult {
   ok?: boolean;
   pulled?: number;
   marked_left?: number;
-  feed_synced_at?: string | null;
   ran_at?: string;
   error?: string;
+}
+
+interface SyncState {
+  last_sync_at: string | null;
+  last_pulled: number | null;
+  last_marked_left: number | null;
+}
+
+function formatWhen(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function System() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
+  const [lastSync, setLastSync] = useState<SyncState | null>(null);
+
+  async function loadLastSync() {
+    const { data } = await supabase
+      .from('sync_state')
+      .select('last_sync_at, last_pulled, last_marked_left')
+      .maybeSingle();
+    if (data) setLastSync(data as SyncState);
+  }
+
+  useEffect(() => {
+    loadLastSync();
+  }, []);
 
   async function syncNow() {
     setRunning(true);
@@ -23,8 +52,6 @@ export default function System() {
     });
 
     if (error) {
-      // supabase-js reports any non-2xx as a generic message; the real reason is in
-      // the response body, so read it out and show it.
       let detail = error.message;
       const ctx = (error as unknown as { context?: Response }).context;
       if (ctx && typeof ctx.text === 'function') {
@@ -47,6 +74,7 @@ export default function System() {
       setResult({ error: detail });
     } else {
       setResult(data as SyncResult);
+      loadLastSync();
     }
     setRunning(false);
   }
@@ -73,10 +101,15 @@ export default function System() {
           </button>
         </div>
 
+        <p className="last-sync">
+          {lastSync?.last_sync_at
+            ? `Last successful pull: ${formatWhen(lastSync.last_sync_at)} (${lastSync.last_pulled ?? 0} active)`
+            : 'No successful pull recorded yet.'}
+        </p>
+
         {result && !result.error && (
           <p className="sync-msg ok">
             Pulled {result.pulled} active, marked {result.marked_left} as left.
-            {result.ran_at ? ` At ${new Date(result.ran_at).toLocaleString('en-GB')}.` : ''}
           </p>
         )}
         {result?.error && <p className="sync-msg err">Sync failed: {result.error}</p>}

@@ -60,3 +60,16 @@ own consultant record (matched on company email, then personal email).
 
 **Who can write:** no one through the app. Only the sync function writes, using the
 service role, so the cache only ever changes by pulling from the Control Room.
+
+---
+
+## sync_state
+
+A single row recording when the consultant sync last ran successfully, and how many it
+pulled and marked as left. Used to show a "last successful pull" line on the System
+page, covering both the manual button and the scheduled runs.
+
+**Who can read:** any signed-in person.
+
+**Who can write:** no one through the app. Only the sync function writes, using the
+service role.

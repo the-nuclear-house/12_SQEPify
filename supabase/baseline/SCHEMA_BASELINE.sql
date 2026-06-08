@@ -138,3 +138,22 @@ create policy consultants_select_self on public.consultants
     lower(coalesce(company_email, '')) = lower(auth.jwt() ->> 'email')
     or lower(email) = lower(auth.jwt() ->> 'email')
   );
+
+-- ============================================================
+-- sync_state (single row: when the consultant sync last ran successfully)
+-- Written by the sync edge function (service role). Read-only to the app.
+-- ============================================================
+create table if not exists public.sync_state (
+  id               boolean primary key default true check (id),
+  last_sync_at     timestamptz,
+  last_pulled      int,
+  last_marked_left int,
+  updated_at       timestamptz not null default now()
+);
+insert into public.sync_state (id) values (true) on conflict (id) do nothing;
+
+alter table public.sync_state enable row level security;
+
+drop policy if exists sync_state_select_auth on public.sync_state;
+create policy sync_state_select_auth on public.sync_state
+  for select using (auth.role() = 'authenticated');

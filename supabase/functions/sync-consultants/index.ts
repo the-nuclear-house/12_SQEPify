@@ -121,6 +121,19 @@ Deno.serve(async (req) => {
     .select('id');
   if (leftErr) return json({ error: 'Leaver update failed', detail: leftErr.message }, 500);
 
+  // Record this successful run so the app can show when the last pull happened
+  // (covers both manual and scheduled runs). Best effort; do not fail the sync if it errors.
+  await admin.from('sync_state').upsert(
+    {
+      id: true,
+      last_sync_at: ranAt,
+      last_pulled: rows.length,
+      last_marked_left: left?.length ?? 0,
+      updated_at: ranAt,
+    },
+    { onConflict: 'id' },
+  );
+
   return json({
     ok: true,
     pulled: rows.length,

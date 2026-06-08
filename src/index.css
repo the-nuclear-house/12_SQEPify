@@ -550,3 +550,10 @@ button {
 .sync-msg.err {
   color: var(--brand-orange);
 }
+
+.last-sync {
+  margin: 14px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}

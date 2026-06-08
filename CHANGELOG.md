@@ -6,6 +6,44 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## sync_state — record of the last successful sync
+
+**What and why.** Adds `public.sync_state`, a single row holding when the consultant
+sync last succeeded and the counts from that run. The sync function writes it at the end
+of a successful run (service role), and the System page reads it to show a "last
+successful pull" line, covering both the manual button and the scheduled runs.
+
+**Access in plain English.** Any signed-in person can read it; no one writes through
+the app, only the sync function does.
+
+**SQL (safe to re-run):**
+
+```sql
+create table if not exists public.sync_state (
+  id               boolean primary key default true check (id),
+  last_sync_at     timestamptz,
+  last_pulled      int,
+  last_marked_left int,
+  updated_at       timestamptz not null default now()
+);
+insert into public.sync_state (id) values (true) on conflict (id) do nothing;
+
+alter table public.sync_state enable row level security;
+
+drop policy if exists sync_state_select_auth on public.sync_state;
+create policy sync_state_select_auth on public.sync_state
+  for select using (auth.role() = 'authenticated');
+```
+
+**Undo:**
+
+```sql
+drop policy if exists sync_state_select_auth on public.sync_state;
+drop table if exists public.sync_state;
+```
+
+---
+
 ## Scheduled Control Room sync (twice daily)
 
 **What and why.** Runs `sync-consultants` automatically twice a day (06:00 and 12:00
