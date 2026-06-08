@@ -14,6 +14,8 @@ const KIND_LABEL: Record<Trainer['kind'], string> = {
   external: 'External provider',
 };
 
+type Step = 'choose' | 'technical_director' | 'consultant' | 'external';
+
 export default function ApprovedTrainers() {
   const { user } = useAuth();
   const isStaff =
@@ -23,11 +25,12 @@ export default function ApprovedTrainers() {
   const [loading, setLoading] = useState(true);
   const [tdOptions, setTdOptions] = useState<Pickable[]>([]);
   const [consultantOptions, setConsultantOptions] = useState<Pickable[]>([]);
-  const [tdPick, setTdPick] = useState('');
-  const [consultantPick, setConsultantPick] = useState('');
-  const [showExternal, setShowExternal] = useState(false);
-  const [ext, setExt] = useState({ company: '', contact: '', email: '', phone: '', notes: '' });
   const [error, setError] = useState<string | null>(null);
+
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<Step>('choose');
+  const [pick, setPick] = useState('');
+  const [ext, setExt] = useState({ company: '', contact: '', email: '', phone: '', notes: '' });
 
   async function load() {
     setLoading(true);
@@ -37,7 +40,10 @@ export default function ApprovedTrainers() {
       .order('kind')
       .order('display_name');
     if (error) setError(error.message);
-    else setTrainers((data as Trainer[]) ?? []);
+    else {
+      setError(null);
+      setTrainers((data as Trainer[]) ?? []);
+    }
     setLoading(false);
   }
 
@@ -45,8 +51,6 @@ export default function ApprovedTrainers() {
     load();
   }, []);
 
-  // Candidate pick lists come from a guarded lookup, so the underlying user and
-  // consultant tables stay closed.
   useEffect(() => {
     if (!isStaff) return;
     supabase.rpc('trainer_candidates').then(({ data }) => {
@@ -63,31 +67,38 @@ export default function ApprovedTrainers() {
   const availableTds = tdOptions.filter((o) => !usedUserIds.has(o.id));
   const availableConsultants = consultantOptions.filter((o) => !usedConsultantIds.has(o.id));
 
-  async function addTd() {
-    const opt = availableTds.find((o) => o.id === tdPick);
-    if (!opt) return;
-    const { error } = await supabase
-      .from('trainers')
-      .insert({ kind: 'technical_director', user_id: opt.id, display_name: opt.name });
-    if (error) setError(error.message);
-    setTdPick('');
+  function openModal() {
+    setStep('choose');
+    setPick('');
+    setExt({ company: '', contact: '', email: '', phone: '', notes: '' });
+    setError(null);
+    setOpen(true);
+  }
+  function closeModal() {
+    setOpen(false);
+  }
+
+  async function save(row: Record<string, unknown>) {
+    const { error } = await supabase.from('trainers').insert(row);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    closeModal();
     load();
   }
 
-  async function addConsultant() {
-    const opt = availableConsultants.find((o) => o.id === consultantPick);
-    if (!opt) return;
-    const { error } = await supabase
-      .from('trainers')
-      .insert({ kind: 'consultant', consultant_id: opt.id, display_name: opt.name });
-    if (error) setError(error.message);
-    setConsultantPick('');
-    load();
+  async function saveTd() {
+    const opt = availableTds.find((o) => o.id === pick);
+    if (opt) await save({ kind: 'technical_director', user_id: opt.id, display_name: opt.name });
   }
-
-  async function addExternal() {
+  async function saveConsultant() {
+    const opt = availableConsultants.find((o) => o.id === pick);
+    if (opt) await save({ kind: 'consultant', consultant_id: opt.id, display_name: opt.name });
+  }
+  async function saveExternal() {
     if (!ext.company && !ext.contact) return;
-    const { error } = await supabase.from('trainers').insert({
+    await save({
       kind: 'external',
       display_name: ext.company || ext.contact,
       company_name: ext.company || null,
@@ -96,10 +107,6 @@ export default function ApprovedTrainers() {
       contact_phone: ext.phone || null,
       notes: ext.notes || null,
     });
-    if (error) setError(error.message);
-    setExt({ company: '', contact: '', email: '', phone: '', notes: '' });
-    setShowExternal(false);
-    load();
   }
 
   async function remove(id: string) {
@@ -111,55 +118,9 @@ export default function ApprovedTrainers() {
   return (
     <div>
       {isStaff && (
-        <div className="card add-trainers">
-          <h2>Add an approved trainer</h2>
-          <p className="muted">
-            Only people and providers added here can be selected to deliver a training.
-          </p>
-          <div className="add-grid">
-            <div className="add-block">
-              <label>Technical Director</label>
-              <div className="add-row">
-                <select className="field" value={tdPick} onChange={(e) => setTdPick(e.target.value)}>
-                  <option value="">Select…</option>
-                  {availableTds.map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
-                </select>
-                <button className="btn" onClick={addTd} disabled={!tdPick}>Add</button>
-              </div>
-            </div>
-            <div className="add-block">
-              <label>Consultant</label>
-              <div className="add-row">
-                <select className="field" value={consultantPick} onChange={(e) => setConsultantPick(e.target.value)}>
-                  <option value="">Select…</option>
-                  {availableConsultants.map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
-                </select>
-                <button className="btn" onClick={addConsultant} disabled={!consultantPick}>Add</button>
-              </div>
-            </div>
-            <div className="add-block">
-              <label>External provider</label>
-              <button className="btn" onClick={() => setShowExternal((s) => !s)}>
-                {showExternal ? 'Cancel' : 'Add external…'}
-              </button>
-            </div>
-          </div>
-
-          {showExternal && (
-            <div className="external-form">
-              <input className="field" placeholder="Company name" value={ext.company} onChange={(e) => setExt({ ...ext, company: e.target.value })} />
-              <input className="field" placeholder="Contact name" value={ext.contact} onChange={(e) => setExt({ ...ext, contact: e.target.value })} />
-              <input className="field" placeholder="Contact email" value={ext.email} onChange={(e) => setExt({ ...ext, email: e.target.value })} />
-              <input className="field" placeholder="Contact phone" value={ext.phone} onChange={(e) => setExt({ ...ext, phone: e.target.value })} />
-              <input className="field" placeholder="Notes" value={ext.notes} onChange={(e) => setExt({ ...ext, notes: e.target.value })} />
-              <button className="btn btn-primary" onClick={addExternal} disabled={!ext.company && !ext.contact}>Save external provider</button>
-            </div>
-          )}
-          {error && <p className="sync-msg err">{error}</p>}
+        <div className="trainers-toolbar">
+          <button className="btn btn-primary" onClick={openModal}>+ Add a new trainer</button>
+          {error && !open && <span className="sync-msg err" style={{ margin: 0 }}>{error}</span>}
         </div>
       )}
 
@@ -199,6 +160,78 @@ export default function ApprovedTrainers() {
           </table>
         )}
       </div>
+
+      {open && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Add a trainer</h2>
+              <button className="modal-close" onClick={closeModal} aria-label="Close">×</button>
+            </div>
+
+            {step === 'choose' && (
+              <>
+                <p className="muted">Who are you adding?</p>
+                <div className="tile-grid">
+                  <button className="tile" onClick={() => setStep('technical_director')}>
+                    <span className="tile-mark cyan">TD</span>
+                    Technical Director
+                  </button>
+                  <button className="tile" onClick={() => setStep('consultant')}>
+                    <span className="tile-mark green">C</span>
+                    Consultant
+                  </button>
+                  <button className="tile" onClick={() => setStep('external')}>
+                    <span className="tile-mark gold">Ext</span>
+                    External provider
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 'technical_director' && (
+              <div className="modal-step">
+                <button className="modal-back" onClick={() => setStep('choose')}>← Back</button>
+                <label>Choose a Technical Director</label>
+                <select className="field" value={pick} onChange={(e) => setPick(e.target.value)}>
+                  <option value="">Select…</option>
+                  {availableTds.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+                {availableTds.length === 0 && <p className="muted">All Technical Directors are already added.</p>}
+                <button className="btn btn-primary btn-block" onClick={saveTd} disabled={!pick}>Add trainer</button>
+              </div>
+            )}
+
+            {step === 'consultant' && (
+              <div className="modal-step">
+                <button className="modal-back" onClick={() => setStep('choose')}>← Back</button>
+                <label>Choose a consultant</label>
+                <select className="field" value={pick} onChange={(e) => setPick(e.target.value)}>
+                  <option value="">Select…</option>
+                  {availableConsultants.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+                {availableConsultants.length === 0 && <p className="muted">No consultants available to add.</p>}
+                <button className="btn btn-primary btn-block" onClick={saveConsultant} disabled={!pick}>Add trainer</button>
+              </div>
+            )}
+
+            {step === 'external' && (
+              <div className="modal-step">
+                <button className="modal-back" onClick={() => setStep('choose')}>← Back</button>
+                <label>External provider details</label>
+                <input className="field" placeholder="Company name" value={ext.company} onChange={(e) => setExt({ ...ext, company: e.target.value })} />
+                <input className="field" placeholder="Contact name" value={ext.contact} onChange={(e) => setExt({ ...ext, contact: e.target.value })} />
+                <input className="field" placeholder="Contact email" value={ext.email} onChange={(e) => setExt({ ...ext, email: e.target.value })} />
+                <input className="field" placeholder="Contact phone" value={ext.phone} onChange={(e) => setExt({ ...ext, phone: e.target.value })} />
+                <input className="field" placeholder="Notes (optional)" value={ext.notes} onChange={(e) => setExt({ ...ext, notes: e.target.value })} />
+                <button className="btn btn-primary btn-block" onClick={saveExternal} disabled={!ext.company && !ext.contact}>Add trainer</button>
+              </div>
+            )}
+
+            {error && open && <p className="sync-msg err">{error}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

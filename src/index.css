@@ -806,3 +806,56 @@ button {
   .add-grid { grid-template-columns: 1fr; }
   .external-form { grid-template-columns: 1fr; }
 }
+
+/* Add-trainer modal */
+.trainers-toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8, 12, 18, 0.62);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal {
+  width: 100%; max-width: 520px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 26px;
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.modal-head h2 { font-size: 19px; margin: 0; }
+.modal-close {
+  border: none; background: transparent; color: var(--text-faint);
+  font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.modal-close:hover { color: var(--text); }
+.tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+.tile {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 22px 12px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  border-radius: 14px; color: var(--text);
+  font-size: 13px; font-weight: 600; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.tile:hover { border-color: var(--accent); background: rgba(255,255,255,0.05); transform: translateY(-2px); }
+.tile-mark {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+}
+.tile-mark.cyan { color: var(--brand-cyan); background: rgba(0,174,239,0.14); }
+.tile-mark.green { color: var(--brand-green); background: rgba(132,195,65,0.14); }
+.tile-mark.gold { color: var(--brand-gold); background: rgba(215,178,62,0.14); }
+.modal-step { margin-top: 16px; }
+.modal-step label {
+  display: block; font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 10px;
+}
+.modal-step .field { margin-bottom: 12px; }
+.modal-back {
+  border: none; background: transparent; color: var(--text-muted);
+  font-size: 13px; cursor: pointer; padding: 0; margin-bottom: 14px;
+}
+.modal-back:hover { color: var(--text); }
+@media (max-width: 560px) { .tile-grid { grid-template-columns: 1fr; } }
