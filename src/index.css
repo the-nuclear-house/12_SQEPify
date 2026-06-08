@@ -1140,3 +1140,15 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
   padding: 10px 18px; border-radius: 999px; cursor: pointer;
 }
 .add-comp-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Role detail: categories as cards flowing across the full width */
+.role-cat-grid { column-width: 300px; column-gap: 16px; margin-bottom: 8px; }
+.role-cat-card {
+  break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+}
+.role-cat-card .role-grp-cat { margin-top: 0; margin-bottom: 10px; }
+.role-cat-card .role-grp-sub-block { margin-bottom: 10px; }
+.role-cat-card .role-grp-sub-block:last-child { margin-bottom: 0; }
+.role-cat-card .chip-wrap { margin-top: 6px; }

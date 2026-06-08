@@ -165,24 +165,28 @@ export default function CompetencyRoles() {
             {selectedRole.is_base && (
               <p className="muted role-note">Everyone is assessed against this role, plus any roles you select for them.</p>
             )}
-            {selectedComps.length > 0 && Object.entries(selectedGrouped).map(([catId, bySub]) => (
-              <div className="role-grp" key={catId}>
-                <div className="role-grp-cat">{catsById[catId]?.name ?? 'Category'}</div>
-                {Object.entries(bySub).map(([subId, items]) => (
-                  <div className="role-grp-sub-block" key={subId}>
-                    {subId !== 'none' && <div className="role-grp-sub">{subsById[subId]?.name ?? ''}</div>}
-                    <div className="chip-wrap">
-                      {items.map((c) => (
-                        <span className="comp-chip" key={c.id}>
-                          {c.name}
-                          <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
-                        </span>
-                      ))}
-                    </div>
+            {selectedComps.length > 0 && (
+              <div className="role-cat-grid">
+                {Object.entries(selectedGrouped).map(([catId, bySub]) => (
+                  <div className="role-cat-card" key={catId}>
+                    <div className="role-grp-cat">{catsById[catId]?.name ?? 'Category'}</div>
+                    {Object.entries(bySub).map(([subId, items]) => (
+                      <div className="role-grp-sub-block" key={subId}>
+                        {subId !== 'none' && <div className="role-grp-sub">{subsById[subId]?.name ?? ''}</div>}
+                        <div className="chip-wrap">
+                          {items.map((c) => (
+                            <span className="comp-chip" key={c.id}>
+                              {c.name}
+                              <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
+            )}
 
             <button className="add-comp-btn" onClick={() => setBrowseOpen(true)}>+ Add competencies</button>
           </div>
