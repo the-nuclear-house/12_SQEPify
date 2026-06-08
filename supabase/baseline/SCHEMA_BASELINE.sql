@@ -302,3 +302,73 @@ drop policy if exists comp_read on public.competencies;
 create policy comp_read on public.competencies for select using (public.is_staff());
 drop policy if exists comp_write on public.competencies;
 create policy comp_write on public.competencies for all using (public.is_staff()) with check (public.is_staff());
+
+-- ============================================================
+-- Roles: named sets of competencies. Base Nuclear is the always-present base.
+-- A competency in Base cannot be in any other role (and vice versa); normal roles
+-- may share competencies. Read: staff. Write: staff. Base role is protected.
+-- ============================================================
+create table if not exists public.roles (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  is_base boolean not null default false,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists roles_single_base on public.roles ((is_base)) where is_base;
+
+create table if not exists public.role_competencies (
+  role_id uuid not null references public.roles(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (role_id, competency_id)
+);
+
+create or replace function public.protect_base_role() returns trigger language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    if old.is_base then raise exception 'The Base Nuclear role cannot be deleted.'; end if;
+    return old;
+  end if;
+  if old.is_base and not new.is_base then raise exception 'The Base Nuclear role must remain the base.'; end if;
+  return new;
+end $$;
+drop trigger if exists trg_protect_base_role on public.roles;
+create trigger trg_protect_base_role before update or delete on public.roles
+  for each row execute function public.protect_base_role();
+
+create or replace function public.enforce_role_exclusivity() returns trigger language plpgsql as $$
+declare target_is_base boolean;
+begin
+  select is_base into target_is_base from public.roles where id = new.role_id;
+  if target_is_base then
+    if exists (select 1 from public.role_competencies rc join public.roles r on r.id = rc.role_id
+               where rc.competency_id = new.competency_id and not r.is_base) then
+      raise exception 'This competency is in a role already; remove it before adding to Base Nuclear.';
+    end if;
+  else
+    if exists (select 1 from public.role_competencies rc join public.roles r on r.id = rc.role_id
+               where rc.competency_id = new.competency_id and r.is_base) then
+      raise exception 'This competency is in Base Nuclear and cannot be added to a role.';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_role_exclusivity on public.role_competencies;
+create trigger trg_role_exclusivity before insert on public.role_competencies
+  for each row execute function public.enforce_role_exclusivity();
+
+alter table public.roles enable row level security;
+alter table public.role_competencies enable row level security;
+drop policy if exists roles_read on public.roles;
+create policy roles_read on public.roles for select using (public.is_staff());
+drop policy if exists roles_write on public.roles;
+create policy roles_write on public.roles for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists rc_read on public.role_competencies;
+create policy rc_read on public.role_competencies for select using (public.is_staff());
+drop policy if exists rc_write on public.role_competencies;
+create policy rc_write on public.role_competencies for all using (public.is_staff()) with check (public.is_staff());
+
+insert into public.roles (name, is_base, sort_order)
+select 'Base Nuclear', true, 0
+where not exists (select 1 from public.roles where is_base);

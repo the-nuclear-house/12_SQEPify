@@ -95,3 +95,17 @@ export interface Competency {
   sort_order: number;
   created_at: string;
 }
+
+export interface Role {
+  id: string;
+  name: string;
+  is_base: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface RoleCompetency {
+  role_id: string;
+  competency_id: string;
+  created_at: string;
+}

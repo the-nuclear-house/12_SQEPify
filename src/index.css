@@ -1032,3 +1032,45 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 @media (max-width: 640px) {
   .page-head.with-action { flex-direction: column; }
 }
+
+/* Competency Library/Roles split */
+.lib-toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+
+/* Roles */
+.role-tabs .base-tag,
+.comp-cat-head .base-tag {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--brand-cyan); background: var(--accent-soft);
+  padding: 2px 6px; border-radius: 5px; margin-right: 8px;
+}
+.role-note { margin: 0 0 16px; }
+.role-grp { margin-bottom: 18px; }
+.role-grp:last-child { margin-bottom: 0; }
+.role-grp-cat {
+  font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--brand-cyan); margin: 4px 0 8px; font-weight: 700;
+}
+.role-grp-sub {
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  margin: 10px 0 6px; padding-left: 2px;
+}
+.role-comp { justify-content: space-between; gap: 10px; }
+.role-comp .role-remove { flex-shrink: 0; }
+
+/* competency browser */
+.modal-wide { max-width: 640px; }
+.browse { margin: 12px 0; }
+.browse-cat { margin-bottom: 14px; }
+.browse-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px;
+}
+.browse-row:hover { background: rgba(255,255,255,0.03); }
+.browse-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.browse-row.disabled { cursor: not-allowed; color: var(--text-faint); }
+.browse-row.disabled:hover { background: transparent; }
+.browse-name { flex: 1; }
+.browse-tag {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-faint); background: rgba(255,255,255,0.05); padding: 3px 7px; border-radius: 5px;
+}

@@ -10,6 +10,22 @@ arrives in later build-order steps and is added here as it is built.
 
 ---
 
+## roles, role_competencies
+
+Roles are named sets of competencies. **Base Nuclear** is a special role that is always
+present, cannot be deleted, and holds the competencies everyone needs. A competency in
+Base cannot belong to any other role, and a competency in any normal role cannot be added
+to Base; the database enforces both. Normal roles may share competencies with each other.
+Assessment (built later) is always Base plus whichever roles are chosen for a person,
+deduplicated.
+
+**Who can read:** staff (superadmins and Technical Directors).
+
+**Who can write:** staff. The Base role is protected (no delete, cannot be un-based) and
+only one Base may exist.
+
+---
+
 ## competency_categories, competency_subcategories, competencies
 
 The competency library, in three levels: a category, a subcategory beneath it, and the
