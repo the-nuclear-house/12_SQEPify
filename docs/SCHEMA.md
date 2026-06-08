@@ -10,13 +10,13 @@ arrives in later build-order steps and is added here as it is built.
 
 ---
 
-## trainings, training_deliverers
+## trainings, training_competencies, training_deliverers
 
-A training addresses exactly one competency and records the star band it moves a learner
-through (from a lower star to a higher one, 1 to 5). It has a duration in days, optional
-notes, and one or more deliverers drawn from the approved trainers registry
-(`training_deliverers`). The band is what lets the assessment later match a person's gap
-to the right training.
+A training has a title, a duration in days, optional notes, and one or more deliverers
+drawn from the approved trainers registry (`training_deliverers`). It addresses one or more
+competencies, each with its own star band, held in `training_competencies` (competency,
+from-star, to-star). A training therefore can lift several capabilities at once. These
+bands are what let the assessment later match a person's gaps to the right trainings.
 
 **Who can read / write:** staff (superadmins and Technical Directors).
 

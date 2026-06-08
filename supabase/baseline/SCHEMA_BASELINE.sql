@@ -381,16 +381,21 @@ where not exists (select 1 from public.roles where is_base);
 create table if not exists public.trainings (
   id uuid primary key default gen_random_uuid(),
   title text not null,
-  competency_id uuid not null references public.competencies(id) on delete cascade,
-  from_level int not null check (from_level between 1 and 4),
-  to_level int not null check (to_level between 2 and 5),
   duration_days numeric,
   notes text,
   sort_order int not null default 0,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- A training addresses one or more competencies, each with its own star band.
+create table if not exists public.training_competencies (
+  training_id uuid not null references public.trainings(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  from_level int not null check (from_level between 1 and 4),
+  to_level int not null check (to_level between 2 and 5),
+  primary key (training_id, competency_id),
   check (from_level < to_level)
 );
-create index if not exists trainings_competency on public.trainings(competency_id);
 
 create table if not exists public.training_deliverers (
   training_id uuid not null references public.trainings(id) on delete cascade,
@@ -408,3 +413,8 @@ drop policy if exists td_read on public.training_deliverers;
 create policy td_read on public.training_deliverers for select using (public.is_staff());
 drop policy if exists td_write on public.training_deliverers;
 create policy td_write on public.training_deliverers for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists tc_read on public.training_competencies;
+create policy tc_read on public.training_competencies for select using (public.is_staff());
+drop policy if exists tc_write on public.training_competencies;
+create policy tc_write on public.training_competencies for all using (public.is_staff()) with check (public.is_staff());
+alter table public.training_competencies enable row level security;

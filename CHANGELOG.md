@@ -6,6 +6,26 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Trainings can cover multiple capabilities
+
+**What and why.** A single course often lifts several capabilities at once, so the
+competency and band moved off the training into a link table, `training_competencies`
+(competency, from-star, to-star). A training now holds just title, duration and notes, and
+links to one or more competencies each with its own band. Existing single-competency
+trainings are migrated automatically. The catalogue card lists each capability with its
+own star-to-star, and the add/edit form has a capabilities editor with "+ Add capability".
+
+**SQL (safe to re-run):** creates `training_competencies`, migrates existing trainings, then
+drops the old `competency_id`/`from_level`/`to_level` columns. See the block in chat.
+
+**Undo:** (note: this loses the per-competency bands)
+
+```sql
+drop table if exists public.training_competencies;
+```
+
+---
+
 ## Training catalogue
 
 **What and why.** Build-order step: the Training Catalogue, the second tab on the Trainings

@@ -8,6 +8,7 @@ import type {
   CompetencySubcategory,
   Trainer,
   Training,
+  TrainingCompetency,
   TrainingDeliverer,
 } from '../lib/types';
 
@@ -19,13 +20,15 @@ const LEVELS = [
   { n: 5, label: 'Expert / trainer' },
 ];
 
-type Modal =
-  | { mode: 'new' }
-  | { mode: 'edit'; training: Training }
-  | null;
+interface CapRow { key: string; competency_id: string; from_level: number; to_level: number; }
+type Modal = { mode: 'new' } | { mode: 'edit'; training: Training } | null;
+
+let capSeq = 0;
+const newCap = (): CapRow => ({ key: `c${capSeq++}`, competency_id: '', from_level: 1, to_level: 3 });
 
 export default function TrainingCatalogue() {
   const [trainings, setTrainings] = useState<Training[]>([]);
+  const [tcs, setTcs] = useState<TrainingCompetency[]>([]);
   const [links, setLinks] = useState<TrainingDeliverer[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [comps, setComps] = useState<Competency[]>([]);
@@ -36,29 +39,29 @@ export default function TrainingCatalogue() {
 
   const [modal, setModal] = useState<Modal>(null);
   const [title, setTitle] = useState('');
-  const [compId, setCompId] = useState('');
-  const [fromLevel, setFromLevel] = useState(1);
-  const [toLevel, setToLevel] = useState(3);
   const [duration, setDuration] = useState('');
-  const [delivererIds, setDelivererIds] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [caps, setCaps] = useState<CapRow[]>([newCap()]);
+  const [delivererIds, setDelivererIds] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
   async function load() {
     setLoading(true);
-    const [t, l, r, k, c, s] = await Promise.all([
+    const [t, tc, l, r, k, c, s] = await Promise.all([
       supabase.from('trainings').select('*').order('title'),
+      supabase.from('training_competencies').select('*'),
       supabase.from('training_deliverers').select('*'),
       supabase.from('trainers').select('*').order('display_name'),
       supabase.from('competencies').select('*').order('name'),
       supabase.from('competency_categories').select('*').order('sort_order').order('name'),
       supabase.from('competency_subcategories').select('*').order('sort_order').order('name'),
     ]);
-    const err = t.error || l.error || r.error || k.error || c.error || s.error;
+    const err = t.error || tc.error || l.error || r.error || k.error || c.error || s.error;
     if (err) setError(err.message);
     else {
       setError(null);
       setTrainings((t.data as Training[]) ?? []);
+      setTcs((tc.data as TrainingCompetency[]) ?? []);
       setLinks((l.data as TrainingDeliverer[]) ?? []);
       setTrainers((r.data as Trainer[]) ?? []);
       setComps((k.data as Competency[]) ?? []);
@@ -67,20 +70,23 @@ export default function TrainingCatalogue() {
     }
     setLoading(false);
   }
-
   useEffect(() => { load(); }, []);
 
   const compById = useMemo(() => Object.fromEntries(comps.map((c) => [c.id, c])), [comps]);
   const catById = useMemo(() => Object.fromEntries(cats.map((c) => [c.id, c])), [cats]);
   const subById = useMemo(() => Object.fromEntries(subs.map((s) => [s.id, s])), [subs]);
   const trainerById = useMemo(() => Object.fromEntries(trainers.map((t) => [t.id, t])), [trainers]);
+  const capsByTraining = useMemo(() => {
+    const m: Record<string, TrainingCompetency[]> = {};
+    tcs.forEach((x) => (m[x.training_id] ??= []).push(x));
+    return m;
+  }, [tcs]);
   const delByTraining = useMemo(() => {
     const m: Record<string, string[]> = {};
     links.forEach((l) => (m[l.training_id] ??= []).push(l.trainer_id));
     return m;
   }, [links]);
 
-  // competency options grouped by "Category - Subcategory" for the select
   const compGroups = useMemo(() => {
     const groups: { label: string; items: Competency[] }[] = [];
     subs.forEach((sub) => {
@@ -90,69 +96,67 @@ export default function TrainingCatalogue() {
     return groups;
   }, [subs, comps, catById]);
 
+  function compLabel(c?: Competency) {
+    if (!c) return '';
+    const cat = catById[c.category_id]?.name ?? '';
+    const sub = c.subcategory_id ? subById[c.subcategory_id]?.name : null;
+    return `${cat}${sub ? ` · ${sub}` : ''}`;
+  }
+
   function openNew() {
-    setTitle(''); setCompId(''); setFromLevel(1); setToLevel(3); setDuration(''); setDelivererIds([]); setNotes('');
+    setTitle(''); setDuration(''); setNotes(''); setCaps([newCap()]); setDelivererIds([]);
     setModal({ mode: 'new' });
   }
   function openEdit(t: Training) {
-    setTitle(t.title); setCompId(t.competency_id); setFromLevel(t.from_level); setToLevel(t.to_level);
-    setDuration(t.duration_days != null ? String(t.duration_days) : '');
-    setDelivererIds(delByTraining[t.id] ?? []); setNotes(t.notes ?? '');
+    setTitle(t.title); setDuration(t.duration_days != null ? String(t.duration_days) : ''); setNotes(t.notes ?? '');
+    const existing = (capsByTraining[t.id] ?? []).map((x) => ({ key: `c${capSeq++}`, competency_id: x.competency_id, from_level: x.from_level, to_level: x.to_level }));
+    setCaps(existing.length ? existing : [newCap()]);
+    setDelivererIds(delByTraining[t.id] ?? []);
     setModal({ mode: 'edit', training: t });
   }
 
+  const validCaps = caps.filter((c) => c.competency_id && c.from_level < c.to_level);
+
   async function save() {
-    if (!modal || modal.mode === null) return;
-    if (!title.trim() || !compId || fromLevel >= toLevel) return;
-    const payload = {
-      title: title.trim(),
-      competency_id: compId,
-      from_level: fromLevel,
-      to_level: toLevel,
-      duration_days: duration.trim() === '' ? null : Number(duration),
-      notes: notes.trim() || null,
-    };
-    let trainingId: string | null = null;
+    if (!modal || !title.trim() || validCaps.length === 0) return;
+    // de-duplicate by competency (a training addresses a competency once)
+    const byComp: Record<string, CapRow> = {};
+    validCaps.forEach((c) => (byComp[c.competency_id] = c));
+    const finalCaps = Object.values(byComp);
+
+    const payload = { title: title.trim(), duration_days: duration.trim() === '' ? null : Number(duration), notes: notes.trim() || null };
+    let id: string;
     if (modal.mode === 'new') {
       const { data, error } = await supabase.from('trainings').insert(payload).select('id').single();
       if (error) { setError(error.message); return; }
-      trainingId = (data as { id: string }).id;
+      id = (data as { id: string }).id;
     } else {
-      const { error } = await supabase.from('trainings').update(payload).eq('id', modal.training.id);
+      id = modal.training.id;
+      const { error } = await supabase.from('trainings').update(payload).eq('id', id);
       if (error) { setError(error.message); return; }
-      trainingId = modal.training.id;
-      await supabase.from('training_deliverers').delete().eq('training_id', trainingId);
+      await supabase.from('training_competencies').delete().eq('training_id', id);
+      await supabase.from('training_deliverers').delete().eq('training_id', id);
     }
-    if (trainingId && delivererIds.length) {
-      const rows = delivererIds.map((trainer_id) => ({ training_id: trainingId, trainer_id }));
-      const { error } = await supabase.from('training_deliverers').insert(rows);
-      if (error) setError(error.message);
+    const capRows = finalCaps.map((c) => ({ training_id: id, competency_id: c.competency_id, from_level: c.from_level, to_level: c.to_level }));
+    const e1 = (await supabase.from('training_competencies').insert(capRows)).error;
+    if (e1) setError(e1.message);
+    if (delivererIds.length) {
+      const e2 = (await supabase.from('training_deliverers').insert(delivererIds.map((trainer_id) => ({ training_id: id, trainer_id })))).error;
+      if (e2) setError(e2.message);
     }
-    setModal(null);
-    load();
+    setModal(null); load();
   }
 
   function del(t: Training) {
     setConfirm({
       title: 'Delete training',
       message: `Delete "${t.title}"? This cannot be undone.`,
-      onYes: () => supabase.from('trainings').delete().eq('id', t.id).then(({ error }) => {
-        if (error) setError(error.message);
-        setConfirm(null); load();
-      }),
+      onYes: () => supabase.from('trainings').delete().eq('id', t.id).then(({ error }) => { if (error) setError(error.message); setConfirm(null); load(); }),
     });
   }
 
-  function toggleDeliverer(id: string) {
-    setDelivererIds((ids) => ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
-  }
-
-  function compLabel(c?: Competency) {
-    if (!c) return 'Unknown competency';
-    const cat = catById[c.category_id]?.name ?? '';
-    const sub = c.subcategory_id ? subById[c.subcategory_id]?.name : null;
-    return `${cat}${sub ? ` · ${sub}` : ''}`;
-  }
+  const setCap = (key: string, patch: Partial<CapRow>) =>
+    setCaps((cs) => cs.map((c) => (c.key === key ? { ...c, ...patch } : c)));
 
   return (
     <div>
@@ -165,34 +169,42 @@ export default function TrainingCatalogue() {
       {loading ? (
         <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>
       ) : trainings.length === 0 ? (
-        <div className="card"><p className="muted">No trainings yet. Use “Add training”. A training needs a competency from the Library and at least one approved trainer.</p></div>
+        <div className="card"><p className="muted">No trainings yet. Use “Add training”.</p></div>
       ) : (
         <div className="training-list">
           {trainings.map((t) => {
-            const comp = compById[t.competency_id];
+            const tcaps = capsByTraining[t.id] ?? [];
             const dels = (delByTraining[t.id] ?? []).map((id) => trainerById[id]?.display_name).filter(Boolean);
             return (
               <div className="training-card" key={t.id}>
-                <div className="training-main">
+                <div className="training-head">
                   <div className="training-title">{t.title}</div>
-                  <div className="training-comp">
-                    <span className="training-breadcrumb">{compLabel(comp)}</span>
-                    <strong>{comp?.name ?? 'Unknown competency'}</strong>
-                  </div>
-                  {dels.length > 0 && (
-                    <div className="training-deliverers">
-                      {dels.map((n, i) => <span className="mini-chip" key={i}>{n}</span>)}
-                    </div>
-                  )}
-                  {t.notes && <div className="training-notes">{t.notes}</div>}
-                </div>
-                <div className="training-side">
-                  <StarBand from={t.from_level} to={t.to_level} />
-                  <div className="training-duration">{t.duration_days != null ? `${t.duration_days} day${t.duration_days === 1 ? '' : 's'}` : 'Duration not set'}</div>
                   <div className="tree-actions">
                     <button className="link-btn" onClick={() => openEdit(t)}>Edit</button>
                     <button className="link-btn danger" onClick={() => del(t)}>Delete</button>
                   </div>
+                </div>
+                <div className="training-caps">
+                  {tcaps.length === 0 ? (
+                    <p className="muted" style={{ margin: 0 }}>No capabilities set.</p>
+                  ) : tcaps.map((cap) => {
+                    const comp = compById[cap.competency_id];
+                    return (
+                      <div className="cap-row" key={cap.competency_id}>
+                        <div className="cap-info">
+                          <span className="cap-breadcrumb">{compLabel(comp)}</span>
+                          <span className="cap-name">{comp?.name ?? 'Unknown competency'}</span>
+                        </div>
+                        <StarBand from={cap.from_level} to={cap.to_level} />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="training-foot">
+                  <span className="training-duration">{t.duration_days != null ? `${t.duration_days} day${t.duration_days === 1 ? '' : 's'}` : 'Duration not set'}</span>
+                  {dels.length > 0 && (
+                    <span className="training-deliverers">{dels.map((n, i) => <span className="mini-chip" key={i}>{n}</span>)}</span>
+                  )}
                 </div>
               </div>
             );
@@ -209,33 +221,32 @@ export default function TrainingCatalogue() {
             </div>
             <div className="modal-step">
               <label>Title</label>
-              <input className="field" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Reactor Physics Foundations" />
+              <input className="field" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Nuclear Safety Culture Foundations" />
 
-              <label>Competency</label>
-              <select className="field" value={compId} onChange={(e) => setCompId(e.target.value)}>
-                <option value="">Select a competency…</option>
-                {compGroups.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </optgroup>
+              <label>Capabilities this training delivers</label>
+              <div className="caps-editor">
+                {caps.map((cap) => (
+                  <div className="cap-edit-row" key={cap.key}>
+                    <select className="field cap-comp" value={cap.competency_id} onChange={(e) => setCap(cap.key, { competency_id: e.target.value })}>
+                      <option value="">Select a competency…</option>
+                      {compGroups.map((g) => (
+                        <optgroup key={g.label} label={g.label}>
+                          {g.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <select className="field cap-lvl" value={cap.from_level} onChange={(e) => { const f = Number(e.target.value); setCap(cap.key, { from_level: f, ...(cap.to_level <= f ? { to_level: f + 1 } : {}) }); }}>
+                      {LEVELS.filter((l) => l.n <= 4).map((l) => <option key={l.n} value={l.n}>{l.n}</option>)}
+                    </select>
+                    <span className="cap-arrow">→</span>
+                    <select className="field cap-lvl" value={cap.to_level} onChange={(e) => setCap(cap.key, { to_level: Number(e.target.value) })}>
+                      {LEVELS.filter((l) => l.n > cap.from_level).map((l) => <option key={l.n} value={l.n}>{l.n}</option>)}
+                    </select>
+                    <span className="cap-preview"><StarBand from={cap.from_level} to={cap.to_level} /></span>
+                    {caps.length > 1 && <button className="chip-x cap-del" onClick={() => setCaps((cs) => cs.filter((c) => c.key !== cap.key))} aria-label="Remove">×</button>}
+                  </div>
                 ))}
-              </select>
-
-              <label>What it delivers</label>
-              <div className="band-edit">
-                <div className="band-pick">
-                  <span>From</span>
-                  <select className="field" value={fromLevel} onChange={(e) => { const f = Number(e.target.value); setFromLevel(f); if (toLevel <= f) setToLevel(f + 1); }}>
-                    {LEVELS.filter((l) => l.n <= 4).map((l) => <option key={l.n} value={l.n}>{l.n} - {l.label}</option>)}
-                  </select>
-                </div>
-                <div className="band-pick">
-                  <span>To</span>
-                  <select className="field" value={toLevel} onChange={(e) => setToLevel(Number(e.target.value))}>
-                    {LEVELS.filter((l) => l.n > fromLevel).map((l) => <option key={l.n} value={l.n}>{l.n} - {l.label}</option>)}
-                  </select>
-                </div>
-                <div className="band-preview"><StarBand from={fromLevel} to={toLevel} /></div>
+                <button className="add-comp-btn" onClick={() => setCaps((cs) => [...cs, newCap()])}>+ Add capability</button>
               </div>
 
               <label>Duration (days)</label>
@@ -248,7 +259,7 @@ export default function TrainingCatalogue() {
                 <div className="deliverer-box">
                   {trainers.map((tr) => (
                     <label className="browse-row" key={tr.id}>
-                      <input type="checkbox" checked={delivererIds.includes(tr.id)} onChange={() => toggleDeliverer(tr.id)} />
+                      <input type="checkbox" checked={delivererIds.includes(tr.id)} onChange={() => setDelivererIds((ids) => ids.includes(tr.id) ? ids.filter((x) => x !== tr.id) : [...ids, tr.id])} />
                       <span className="browse-name">{tr.display_name}</span>
                       <span className="browse-tag">{tr.kind === 'technical_director' ? 'TD' : tr.kind === 'consultant' ? 'Consultant' : 'External'}</span>
                     </label>
@@ -259,7 +270,7 @@ export default function TrainingCatalogue() {
               <label>Notes (optional)</label>
               <textarea className="field" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything useful about this training" />
 
-              <button className="btn btn-primary btn-block" onClick={save} disabled={!title.trim() || !compId}>
+              <button className="btn btn-primary btn-block" onClick={save} disabled={!title.trim() || validCaps.length === 0}>
                 {modal.mode === 'new' ? 'Add training' : 'Save changes'}
               </button>
             </div>
@@ -268,12 +279,7 @@ export default function TrainingCatalogue() {
       )}
 
       {confirm && (
-        <ConfirmDialog
-          title={confirm.title}
-          message={confirm.message}
-          onConfirm={() => confirm.onYes()}
-          onCancel={() => setConfirm(null)}
-        />
+        <ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={() => confirm.onYes()} onCancel={() => setConfirm(null)} />
       )}
     </div>
   );

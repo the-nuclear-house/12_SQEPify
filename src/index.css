@@ -1225,3 +1225,33 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
   .training-card { flex-direction: column; }
   .training-side { align-items: flex-start; text-align: left; border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 12px; }
 }
+
+/* Training card with multiple capabilities */
+.training-card { display: block; }
+.training-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.training-caps { display: flex; flex-direction: column; }
+.cap-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 9px 0; border-bottom: 1px solid var(--border-soft);
+}
+.cap-row:last-child { border-bottom: none; }
+.cap-info { min-width: 0; }
+.cap-breadcrumb {
+  display: block; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--brand-cyan); margin-bottom: 2px;
+}
+.cap-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.training-foot {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+
+/* Capabilities editor in the modal */
+.caps-editor { margin-bottom: 14px; }
+.cap-edit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.cap-edit-row .field { margin-bottom: 0; }
+.cap-comp { flex: 1; min-width: 180px; }
+.cap-lvl { width: 64px; flex: none; }
+.cap-arrow { color: var(--text-faint); }
+.cap-preview { flex-shrink: 0; }
+.cap-del { flex-shrink: 0; }
