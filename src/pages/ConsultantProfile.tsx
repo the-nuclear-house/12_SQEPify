@@ -150,6 +150,7 @@ export default function ConsultantProfile() {
   const [scores, setScores] = useState<AssessmentScore[]>([]);
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
+  const [setupWiz, setSetupWiz] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,8 +248,12 @@ export default function ConsultantProfile() {
       const { error } = await supabase.from('assessment_roles').insert(selected.map((role_id) => ({ assessment_id: aid, role_id })));
       if (error) setError(error.message);
     }
-    setSaving(false); setModalStep(null); load();
+    setSaving(false);
+    await load();
+    setSetupWiz(1);
   }
+
+  function openSetup() { setSetupWiz(0); setModalStep(0); }
 
   function readFile(file: File): Promise<{ file_base64?: string; media_type?: string; text?: string }> {
     return new Promise((resolve, reject) => {
@@ -322,7 +327,7 @@ export default function ConsultantProfile() {
 
       {error && <p className="sync-msg err">{error}</p>}
 
-      <NuclearisationProcess steps={STEPS} current={current} onSelect={(i) => setModalStep(i)} />
+      <NuclearisationProcess steps={STEPS} current={current} onSelect={(i) => { if (i === 0) setSetupWiz(0); setModalStep(i); }} />
 
       <div className="profile-hero">
         <div className="card fig-card">
@@ -354,13 +359,13 @@ export default function ConsultantProfile() {
             {!assessment ? (
               <>
                 <p className="assess-missing"><span className="dot-missing" />No assessment yet</p>
-                <button className="btn btn-primary" onClick={() => setModalStep(0)}>Start assessment</button>
+                <button className="btn btn-primary" onClick={openSetup}>Start assessment</button>
               </>
             ) : (
               <>
                 <p className="assess-status">{STATUS_LABEL[assessment.status] ?? assessment.status}</p>
                 <p className="muted card-hint">Roles: Base Nuclear{selected.length ? ', ' + selected.map(roleName).join(', ') : ''}</p>
-                <button className="btn btn-sm" onClick={() => setModalStep(0)}>Open set-up</button>
+                <button className="btn btn-sm" onClick={openSetup}>Open set-up</button>
               </>
             )}
           </div>
@@ -387,37 +392,52 @@ export default function ConsultantProfile() {
         </div>
       </div>
 
-      {/* Set-up modal */}
+      {/* Set-up wizard */}
       {modalStep === 0 && (
         <div className="modal-overlay" onClick={() => setModalStep(null)}>
           <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>Set-up</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
-            <div className="modal-step">
-              <h3 className="modal-sub">1 · Roles</h3>
-              <p className="muted">Base Nuclear always applies; add any role-based competencies on top.</p>
-              <div className="role-pick">
-                {baseRole && (
-                  <label className="role-pick-row locked"><input type="checkbox" checked readOnly />
-                    <span className="role-pick-name"><span className="base-tag">BASE</span>{baseRole.name}</span>
-                    <span className="role-pick-tag">Always applies</span>
-                  </label>
-                )}
-                {otherRoles.length === 0 && <p className="muted">No role-based roles defined yet.</p>}
-                {otherRoles.map((r) => (
-                  <label className="role-pick-row" key={r.id}>
-                    <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
-                    <span className="role-pick-name">{r.name}</span>
-                  </label>
-                ))}
-              </div>
-              <button className="btn btn-primary btn-block" onClick={saveSetup} disabled={saving}>
-                {saving ? 'Saving…' : assessment ? 'Save roles' : 'Start assessment'}
-              </button>
 
-              {assessment && (
+            <div className="wiz-steps">
+              {['Roles', 'CV assessment', 'Hand over'].map((l, i) => (
+                <div className={`wiz-step ${i === setupWiz ? 'current' : i < setupWiz ? 'done' : ''}`} key={l}>
+                  <span className="wiz-num">{i < setupWiz ? '✓' : i + 1}</span>
+                  <span className="wiz-label">{l}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-step">
+              {setupWiz === 0 && (
                 <>
-                  <h3 className="modal-sub">2 · CV assessment</h3>
-                  <p className="muted">Upload the consultant's CV. The AI reads it against the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} in scope and proposes a starting level for each. PDF, Word, image or text.</p>
+                  <p className="muted">Which roles is this consultant assessed against? Base Nuclear always applies; add any role-based competencies on top.</p>
+                  <div className="role-pick">
+                    {baseRole && (
+                      <div className="role-pick-row locked">
+                        <span className="role-pick-check">✓</span>
+                        <span className="role-pick-name">{baseRole.name}</span>
+                        <span className="role-pick-tag">Always applies</span>
+                      </div>
+                    )}
+                    {otherRoles.length === 0 && <p className="muted">No role-based roles defined yet.</p>}
+                    {otherRoles.map((r) => (
+                      <label className={`role-pick-row${selected.includes(r.id) ? ' on' : ''}`} key={r.id}>
+                        <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
+                        <span className="role-pick-name">{r.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="wiz-foot">
+                    <button className="btn btn-primary wiz-next" onClick={saveSetup} disabled={saving}>
+                      {saving ? 'Saving…' : 'Save and continue'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {setupWiz === 1 && (
+                <>
+                  <p className="muted">Upload the consultant's CV. The AI reads it against the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} now in scope and proposes a starting level for each. PDF, Word, image or text.</p>
                   <label className={`cv-drop${cvRunning ? ' busy' : ''}`}>
                     <input type="file" accept=".pdf,.doc,.docx,.txt,.md,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={cvRunning}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) runCv(f); e.target.value = ''; }} />
@@ -425,17 +445,14 @@ export default function ConsultantProfile() {
                   </label>
                   {cvMsg && <p className="muted cv-msg">{cvMsg}</p>}
 
-                  {scores.length > 0 && (
+                  {scores.some((s) => s.ai_level != null) && (
                     <div className="proposed">
                       <div className="proposed-head">Proposed levels</div>
                       {applicable.filter((c) => scoreByComp[c.id]?.ai_level != null).map((c) => {
                         const sc = scoreByComp[c.id];
                         return (
                           <div className="proposed-row" key={c.id}>
-                            <div className="proposed-name">
-                              {c.name}
-                              {sc?.note && <span className="proposed-note">{sc.note}</span>}
-                            </div>
+                            <div className="proposed-name">{c.name}{sc?.note && <span className="proposed-note">{sc.note}</span>}</div>
                             <StarRating value={sc?.ai_level ?? 0} readOnly showLabel={false} size="sm" />
                           </div>
                         );
@@ -443,11 +460,29 @@ export default function ConsultantProfile() {
                     </div>
                   )}
 
-                  <h3 className="modal-sub">3 · Hand over</h3>
-                  <p className="muted">Send to the consultant for self-assessment. They review the proposed levels and rate themselves.</p>
-                  <button className="btn btn-primary btn-block" onClick={sendForSelf} disabled={saving}>
-                    {saving ? 'Sending…' : 'Send for self-assessment'}
-                  </button>
+                  <div className="wiz-foot">
+                    <button className="btn btn-ghost" onClick={() => setSetupWiz(0)}>Back</button>
+                    <button className="btn btn-primary wiz-next" onClick={() => setSetupWiz(2)}>
+                      {scores.some((s) => s.ai_level != null) ? 'Continue' : 'Skip for now'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {setupWiz === 2 && (
+                <>
+                  <p className="muted">Ready to hand over. The consultant reviews the proposed levels and completes their self-assessment.</p>
+                  <dl className="info-list">
+                    <div><dt>Roles</dt><dd>Base Nuclear{selected.length ? ', ' + selected.map(roleName).join(', ') : ''}</dd></div>
+                    <div><dt>Competencies in scope</dt><dd>{applicable.length}</dd></div>
+                    <div><dt>AI-proposed so far</dt><dd>{scores.filter((s) => s.ai_level != null).length}</dd></div>
+                  </dl>
+                  <div className="wiz-foot">
+                    <button className="btn btn-ghost" onClick={() => setSetupWiz(1)}>Back</button>
+                    <button className="btn btn-primary wiz-next" onClick={sendForSelf} disabled={saving}>
+                      {saving ? 'Sending…' : 'Send for self-assessment'}
+                    </button>
+                  </div>
                 </>
               )}
             </div>

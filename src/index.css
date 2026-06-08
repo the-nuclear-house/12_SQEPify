@@ -1416,16 +1416,40 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 }
 
 .panel-title { margin: 0 0 6px; font-size: 18px; }
-.role-pick { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; }
+.role-pick { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; }
 .role-pick-row {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  cursor: pointer;
+  cursor: pointer; transition: border-color .15s, background .15s;
 }
-.role-pick-row.locked { cursor: default; opacity: 0.9; }
-.role-pick-name { font-weight: 500; display: inline-flex; align-items: center; }
+.role-pick-row:hover { border-color: var(--border); background: var(--surface-3); }
+.role-pick-row.on { border-color: var(--accent); }
+.role-pick-row.locked { cursor: default; }
+.role-pick-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.role-pick-check { width: 16px; text-align: center; color: var(--brand-green); font-weight: 700; }
+.role-pick-name { font-weight: 500; text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
 .role-pick-tag { margin-left: auto; font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
 .setup-saved { margin-top: 12px; }
+
+/* Set-up wizard: stepper + footer */
+.wiz-steps { display: flex; gap: 8px; margin: 14px 0 6px; }
+.wiz-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+.wiz-step:not(:last-child)::after {
+  content: ''; position: absolute; top: 13px; left: calc(50% + 18px); right: calc(-50% + 18px);
+  height: 2px; background: var(--border);
+}
+.wiz-step.done:not(:last-child)::after { background: var(--brand-green); }
+.wiz-num {
+  width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; background: var(--surface-3); color: var(--text-muted);
+  border: 1px solid var(--border); z-index: 1;
+}
+.wiz-step.current .wiz-num { background: var(--accent); color: #04222e; border-color: var(--accent); }
+.wiz-step.done .wiz-num { background: var(--brand-green); color: #0c1f06; border-color: var(--brand-green); }
+.wiz-label { font-size: 12px; color: var(--text-muted); }
+.wiz-step.current .wiz-label { color: var(--text); font-weight: 600; }
+.wiz-foot { display: flex; gap: 10px; margin-top: 22px; }
+.wiz-foot .wiz-next { flex: 1; }
 
 /* Consultant profile */
 .back-link { display: inline-block; font-size: 13px; color: var(--text-muted); text-decoration: none; margin-bottom: 6px; }
