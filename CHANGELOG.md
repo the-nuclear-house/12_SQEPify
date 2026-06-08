@@ -6,6 +6,77 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Scheduled Control Room sync (twice daily)
+
+**What and why.** Runs `sync-consultants` automatically twice a day (06:00 and 12:00
+UTC) using pg_cron and pg_net, in addition to the manual Sync now button. The cron call
+authenticates as the service role, which the function accepts; the service role key is
+held in Supabase Vault, never in the repo.
+
+**One-off setup (run once in the SQL editor, value never committed).** Get the SQEPify
+service role key from Project Settings, then API, and store it in Vault. Replace the
+placeholder with the real key:
+
+```sql
+select vault.create_secret('PASTE-SQEPIFY-SERVICE-ROLE-KEY', 'sqepify_service_role_key');
+```
+
+**Schedule (safe to re-run; re-running updates the jobs by name).** Replace the URL with
+your SQEPify function URL.
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.schedule(
+  'sqepify-sync-morning',
+  '0 6 * * *',
+  $$
+  select net.http_post(
+    url := 'https://YOUR-SQEPIFY-REF.supabase.co/functions/v1/sync-consultants',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'sqepify_service_role_key')
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+select cron.schedule(
+  'sqepify-sync-midday',
+  '0 12 * * *',
+  $$
+  select net.http_post(
+    url := 'https://YOUR-SQEPIFY-REF.supabase.co/functions/v1/sync-consultants',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'sqepify_service_role_key')
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+**Check it (optional):**
+
+```sql
+select jobname, status, return_message, start_time
+from cron.job_run_details
+order by start_time desc
+limit 10;
+```
+
+**Undo:**
+
+```sql
+select cron.unschedule('sqepify-sync-morning');
+select cron.unschedule('sqepify-sync-midday');
+```
+
+---
+
 ## Consultants cache and Control Room sync
 
 **What and why.** Adds `public.consultants`, a local cache of active consultants pulled
