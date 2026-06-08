@@ -107,6 +107,7 @@ export interface Role {
 export interface RoleCompetency {
   role_id: string;
   competency_id: string;
+  required_level: number;
   created_at: string;
 }
 
@@ -129,4 +130,11 @@ export interface TrainingCompetency {
 export interface TrainingDeliverer {
   training_id: string;
   trainer_id: string;
+}
+
+export interface CompetencyLevelPath {
+  competency_id: string;
+  level: number;
+  actions: string | null;
+  verification: string | null;
 }

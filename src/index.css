@@ -1255,3 +1255,37 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .cap-arrow { color: var(--text-faint); }
 .cap-preview { flex-shrink: 0; }
 .cap-del { flex-shrink: 0; }
+
+/* Learning path */
+.modal-sub { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+.lp-intro { font-size: 13px; color: var(--text-muted); margin: 0 0 14px; }
+.lp-baseline {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text-muted);
+}
+.lp-stars { font-family: var(--font-mono); color: var(--star-off); letter-spacing: 1px; }
+.lp-level {
+  padding: 14px; margin-bottom: 12px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.lp-level-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.lp-level-name { font-weight: 600; color: var(--text); }
+.lp-stars-mini { margin-left: auto; font-family: var(--font-mono); color: var(--star-on); letter-spacing: 1px; font-size: 13px; }
+.lp-level label { display: block; margin: 8px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+.lp-trainings { margin-top: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lp-trainings-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin-right: 2px; }
+
+/* Required-level selector inside a role competency chip */
+.comp-chip .chip-level {
+  margin-left: 8px;
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1px 4px;
+  cursor: pointer;
+}
+.comp-chip .chip-level:focus { outline: none; border-color: var(--accent); }

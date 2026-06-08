@@ -320,6 +320,7 @@ create unique index if not exists roles_single_base on public.roles ((is_base)) 
 create table if not exists public.role_competencies (
   role_id uuid not null references public.roles(id) on delete cascade,
   competency_id uuid not null references public.competencies(id) on delete cascade,
+  required_level int not null default 4 check (required_level between 1 and 5),
   created_at timestamptz not null default now(),
   primary key (role_id, competency_id)
 );
@@ -378,6 +379,19 @@ where not exists (select 1 from public.roles where is_base);
 -- a lower star to a higher one. Deliverers come from the approved trainers registry.
 -- Read/write: staff.
 -- ============================================================
+create table if not exists public.competency_level_paths (
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  level int not null check (level between 1 and 5),
+  actions text,
+  verification text,
+  primary key (competency_id, level)
+);
+alter table public.competency_level_paths enable row level security;
+drop policy if exists clp_read on public.competency_level_paths;
+create policy clp_read on public.competency_level_paths for select using (public.is_staff());
+drop policy if exists clp_write on public.competency_level_paths;
+create policy clp_write on public.competency_level_paths for all using (public.is_staff()) with check (public.is_staff());
+
 create table if not exists public.trainings (
   id uuid primary key default gen_random_uuid(),
   title text not null,

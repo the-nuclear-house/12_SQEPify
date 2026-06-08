@@ -9,6 +9,13 @@ import type {
   RoleCompetency,
 } from '../lib/types';
 
+const REQ_LEVELS = [
+  { n: 2, label: 'Awareness' },
+  { n: 3, label: 'Basic' },
+  { n: 4, label: 'SQEP' },
+  { n: 5, label: 'Expert' },
+];
+
 export default function CompetencyRoles() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [cats, setCats] = useState<CompetencyCategory[]>([]);
@@ -65,6 +72,23 @@ export default function CompetencyRoles() {
     () => new Set(rc.filter((x) => x.role_id === selectedRoleId).map((x) => x.competency_id)),
     [rc, selectedRoleId],
   );
+
+  const reqByComp = useMemo(() => {
+    const m: Record<string, number> = {};
+    rc.filter((x) => x.role_id === selectedRoleId).forEach((x) => (m[x.competency_id] = x.required_level));
+    return m;
+  }, [rc, selectedRoleId]);
+
+  async function setLevel(c: Competency, level: number) {
+    if (!selectedRoleId) return;
+    setRc((prev) => prev.map((x) => (x.role_id === selectedRoleId && x.competency_id === c.id ? { ...x, required_level: level } : x)));
+    const { error } = await supabase
+      .from('role_competencies')
+      .update({ required_level: level })
+      .eq('role_id', selectedRoleId)
+      .eq('competency_id', c.id);
+    if (error) { setError(error.message); refresh(); }
+  }
 
   function count(roleId: string) {
     return rc.filter((x) => x.role_id === roleId).length;
@@ -177,6 +201,17 @@ export default function CompetencyRoles() {
                           {items.map((c) => (
                             <span className="comp-chip" key={c.id}>
                               {c.name}
+                              <select
+                                className="chip-level"
+                                value={reqByComp[c.id] ?? 4}
+                                onChange={(e) => setLevel(c, Number(e.target.value))}
+                                title="Required level"
+                                aria-label={`Required level for ${c.name}`}
+                              >
+                                {REQ_LEVELS.map((l) => (
+                                  <option key={l.n} value={l.n}>{l.n}★ {l.label}</option>
+                                ))}
+                              </select>
                               <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
                             </span>
                           ))}

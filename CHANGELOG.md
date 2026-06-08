@@ -6,6 +6,45 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Required level per competency on a role
+
+**What and why.** Each competency in a role now carries a required level (Awareness, Basic,
+SQEP or Expert), so a role can require different skills at different depths rather than
+everything at SQEP. This is the target the upcoming consultant assessment measures gaps
+against. Set inline on each competency chip in the Roles tab. Existing assignments default
+to Level 4 (SQEP); adjust down where a role needs less.
+
+**SQL (safe to re-run):** adds `required_level` to `role_competencies` (default 4, checked 1
+to 5). See the block in chat.
+
+**Undo:**
+
+```sql
+alter table public.role_competencies drop column if exists required_level;
+```
+
+---
+
+## Learning paths per competency
+
+**What and why.** Each competency now has a learning path: for every level above "no
+knowledge", what someone must do to reach it (Related actions) and how it is evidenced
+(Verification means). Trainings are matched to each level automatically from the catalogue,
+so the path and the catalogue stay in step without double entry. Opened from a competency's
+"Learning path" button in the Library. Our five star labels are unchanged; the path content
+(for example, drawn from the learning-paths spreadsheet) is entered against them.
+
+**SQL (safe to re-run):** creates `competency_level_paths` (competency, level, actions,
+verification) with staff-only RLS. See the block in chat.
+
+**Undo:**
+
+```sql
+drop table if exists public.competency_level_paths;
+```
+
+---
+
 ## Trainings can cover multiple capabilities
 
 **What and why.** A single course often lifts several capabilities at once, so the

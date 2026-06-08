@@ -142,3 +142,18 @@ page, covering both the manual button and the scheduled runs.
 
 **Who can write:** no one through the app. Only the sync function writes, using the
 service role.
+
+## competency_level_paths
+
+The learning path for a competency. One row per (competency, level 1 to 5) holding `actions`
+(what to do to reach that level) and `verification` (how it is evidenced). Levels use the
+same five-star scale as everywhere else; level 1 (no knowledge) carries no path. Which
+trainings reach a level is derived from `training_competencies`, not stored here. Read and
+write are staff-only (`is_staff()`).
+
+## role_competencies.required_level
+
+Each row in `role_competencies` carries `required_level` (1 to 5, default 4), the target
+level that role needs for that competency. The same competency can be required at different
+levels in different roles. A consultant's gap on a competency is this target minus their
+assessed level, taken across Base Nuclear plus their selected roles.
