@@ -1,3 +1,41 @@
+## Assessment scores table (assessment_scores)
+
+**What and why.** A per-competency scores table holding the three levels each competency
+collects through the journey: the AI's proposed level from the CV (`ai_level`), the
+consultant's self-assessment (`self_level`) and the Technical Director's validated level
+(`validated_level`), plus a free-text `note`. This underpins the Set-up CV/AI step (which
+writes `ai_level`), self-assessment and validation, and feeds the figure and radar later.
+One row per (assessment, competency).
+
+**Access.** Staff (superadmin or technical director) read and write all rows. A consultant
+can read and write the rows of their own assessment (matched by email), for self-assessment.
+
+**SQL.**
+```sql
+create table if not exists public.assessment_scores (
+  assessment_id uuid not null references public.assessments(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  ai_level int check (ai_level between 0 and 5),
+  self_level int check (self_level between 0 and 5),
+  validated_level int check (validated_level between 0 and 5),
+  note text,
+  primary key (assessment_id, competency_id)
+);
+alter table public.assessment_scores enable row level security;
+drop policy if exists as_staff_all on public.assessment_scores;
+create policy as_staff_all on public.assessment_scores for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists as_own_rw on public.assessment_scores;
+create policy as_own_rw on public.assessment_scores for all using (
+  exists (select 1 from public.assessments a join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+) with check (
+  exists (select 1 from public.assessments a join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+);
+```
+
+**Undo.** `drop table if exists public.assessment_scores;`
+
 ## AI backend foundation (settings, secrets, first edge function)
 
 **What and why.** Set up the server-side AI plumbing, mirroring the Control Room: a key/value
