@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import ConfirmDialog from './ConfirmDialog';
 import type { Trainer } from '../lib/types';
 
 interface Pickable {
@@ -26,6 +27,7 @@ export default function ApprovedTrainers() {
   const [tdOptions, setTdOptions] = useState<Pickable[]>([]);
   const [consultantOptions, setConsultantOptions] = useState<Pickable[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<Trainer | null>(null);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('choose');
@@ -112,6 +114,7 @@ export default function ApprovedTrainers() {
   async function remove(id: string) {
     const { error } = await supabase.from('trainers').delete().eq('id', id);
     if (error) setError(error.message);
+    setPendingRemove(null);
     load();
   }
 
@@ -151,7 +154,7 @@ export default function ApprovedTrainers() {
                   </td>
                   {isStaff && (
                     <td className="row-actions">
-                      <button className="btn btn-ghost btn-sm" onClick={() => remove(t.id)}>Remove</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setPendingRemove(t)}>Remove</button>
                     </td>
                   )}
                 </tr>
@@ -231,6 +234,16 @@ export default function ApprovedTrainers() {
             {error && open && <p className="sync-msg err">{error}</p>}
           </div>
         </div>
+      )}
+
+      {pendingRemove && (
+        <ConfirmDialog
+          title="Remove trainer"
+          message={`Remove "${pendingRemove.display_name}" from the approved trainers? They will no longer be selectable to deliver a training.`}
+          confirmLabel="Remove"
+          onConfirm={() => remove(pendingRemove.id)}
+          onCancel={() => setPendingRemove(null)}
+        />
       )}
     </div>
   );

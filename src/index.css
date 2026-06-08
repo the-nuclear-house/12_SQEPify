@@ -1018,3 +1018,10 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .level-line { display: flex; gap: 10px; align-items: flex-start; }
 .level-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 .level-text strong { color: var(--text); font-weight: 600; }
+
+/* In-app confirm dialog */
+.modal-confirm { max-width: 440px; }
+.confirm-msg { color: var(--text-muted); font-size: 14px; line-height: 1.55; margin: 14px 0 24px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger:hover { background: #b94e09; border-color: #b94e09; }

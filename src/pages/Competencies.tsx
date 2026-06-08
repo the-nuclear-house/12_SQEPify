@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import ConfirmDialog from '../components/ConfirmDialog';
 import type {
   Competency,
   CompetencyCategory,
@@ -42,6 +43,8 @@ export default function Competencies() {
   const [mDesc, setMDesc] = useState('');
   const [mLevels, setMLevels] = useState<Record<string, string>>({});
   const [showLevels, setShowLevels] = useState(false);
+
+  const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -103,10 +106,16 @@ export default function Competencies() {
     const table = edit.kind === 'category' ? 'competency_categories' : 'competency_subcategories';
     run(supabase.from(table).update({ name: editName.trim() }).eq('id', edit.id));
   };
-  const delNode = (kind: 'category' | 'subcategory', id: string, warn: string) => {
-    if (!window.confirm(warn)) return;
+  const delNode = (kind: 'category' | 'subcategory', id: string, name: string) => {
     const table = kind === 'category' ? 'competency_categories' : 'competency_subcategories';
-    run(supabase.from(table).delete().eq('id', id));
+    setConfirm({
+      title: kind === 'category' ? 'Delete category' : 'Delete subcategory',
+      message:
+        kind === 'category'
+          ? `Delete "${name}"? This removes the category and every subcategory and competency inside it. This cannot be undone.`
+          : `Delete "${name}"? This removes the subcategory and the competencies inside it. This cannot be undone.`,
+      onYes: () => run(supabase.from(table).delete().eq('id', id)),
+    });
   };
 
   function openNew(categoryId: string, subcategoryId: string) {
@@ -141,8 +150,12 @@ export default function Competencies() {
     }
   };
   const deleteComp = (comp: Competency) => {
-    if (!window.confirm(`Delete competency "${comp.name}"?`)) return;
-    run(supabase.from('competencies').delete().eq('id', comp.id));
+    setModal(null);
+    setConfirm({
+      title: 'Delete competency',
+      message: `Delete "${comp.name}"? This removes it from the library. This cannot be undone.`,
+      onYes: () => run(supabase.from('competencies').delete().eq('id', comp.id)),
+    });
   };
 
   const renameRow = (
@@ -188,7 +201,7 @@ export default function Competencies() {
                       <h2>{cat.name}</h2>
                       <div className="tree-actions">
                         <button className="link-btn" onClick={() => { setEdit({ kind: 'category', id: cat.id }); setEditName(cat.name); }}>Rename</button>
-                        <button className="link-btn danger" onClick={() => delNode('category', cat.id, `Delete category "${cat.name}" and everything under it?`)}>Delete</button>
+                        <button className="link-btn danger" onClick={() => delNode('category', cat.id, cat.name)}>Delete</button>
                       </div>
                     </>
                   )}
@@ -223,7 +236,7 @@ export default function Competencies() {
                         {subEditing ? renameRow : (
                           <div className="tree-actions">
                             <button className="link-btn" onClick={() => { setEdit({ kind: 'subcategory', id: activeSubObj.id }); setEditName(activeSubObj.name); }}>Rename subcategory</button>
-                            <button className="link-btn danger" onClick={() => delNode('subcategory', activeSubObj.id, `Delete subcategory "${activeSubObj.name}" and its competencies?`)}>Delete subcategory</button>
+                            <button className="link-btn danger" onClick={() => delNode('subcategory', activeSubObj.id, activeSubObj.name)}>Delete subcategory</button>
                           </div>
                         )}
                       </div>
@@ -319,6 +332,14 @@ export default function Competencies() {
             )}
           </div>
         </div>
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          onConfirm={() => { confirm.onYes(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
       )}
     </div>
   );
