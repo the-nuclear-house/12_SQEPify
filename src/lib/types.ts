@@ -144,3 +144,27 @@ export interface CompetencyLevelTraining {
   level: number;
   training_id: string;
 }
+
+export type AssessmentStatus =
+  | 'draft'
+  | 'self_assessment'
+  | 'validation'
+  | 'planning'
+  | 'plan_review'
+  | 'delivered'
+  | 'cancelled';
+
+export interface Assessment {
+  id: string;
+  consultant_id: string;
+  status: AssessmentStatus;
+  horizon_months: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssessmentRole {
+  assessment_id: string;
+  role_id: string;
+}

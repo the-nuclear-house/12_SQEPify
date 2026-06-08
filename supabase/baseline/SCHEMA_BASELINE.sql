@@ -444,3 +444,45 @@ create policy tc_read on public.training_competencies for select using (public.i
 drop policy if exists tc_write on public.training_competencies;
 create policy tc_write on public.training_competencies for all using (public.is_staff()) with check (public.is_staff());
 alter table public.training_competencies enable row level security;
+
+-- =========================================================================
+-- Consultant assessments (the consultant-page workflow)
+-- =========================================================================
+create table if not exists public.assessments (
+  id uuid primary key default gen_random_uuid(),
+  consultant_id uuid not null references public.consultants(id) on delete cascade,
+  status text not null default 'draft'
+    check (status in ('draft','self_assessment','validation','planning','plan_review','delivered','cancelled')),
+  horizon_months int not null default 18,
+  created_by uuid references public.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists assessments_consultant on public.assessments(consultant_id);
+
+create table if not exists public.assessment_roles (
+  assessment_id uuid not null references public.assessments(id) on delete cascade,
+  role_id uuid not null references public.roles(id) on delete cascade,
+  primary key (assessment_id, role_id)
+);
+
+alter table public.assessments enable row level security;
+alter table public.assessment_roles enable row level security;
+
+drop policy if exists assessments_staff_all on public.assessments;
+create policy assessments_staff_all on public.assessments for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists assessments_own_read on public.assessments;
+create policy assessments_own_read on public.assessments for select using (
+  consultant_id::text = (select u.consultant_id from public.users u where u.id = auth.uid())
+);
+
+drop policy if exists ar_staff_all on public.assessment_roles;
+create policy ar_staff_all on public.assessment_roles for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists ar_own_read on public.assessment_roles;
+create policy ar_own_read on public.assessment_roles for select using (
+  exists (
+    select 1 from public.assessments a
+    join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and u.id = auth.uid()
+  )
+);

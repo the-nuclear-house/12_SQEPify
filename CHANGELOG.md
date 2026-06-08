@@ -1,3 +1,24 @@
+## Consultant assessment workflow, step 1 (set-up)
+
+**What and why.** The consultant page is now the start of the assessment workflow. Opening a
+consultant shows a five-step stepper (Set-up, Self-assessment, Validation, Plan, Done) and
+the Set-up step: choose the roles the consultant is assessed against (Base Nuclear always
+applies, role-based roles added on top), which starts the assessment. The later steps and the
+AI (CV parsing, plan generation) build on top of this.
+
+**SQL (safe to re-run):** creates `assessments` (consultant, status, 18-month horizon) and
+`assessment_roles`, with staff-write RLS and a read policy so a consultant can later see their
+own. See the block in chat.
+
+**Undo:**
+
+```sql
+drop table if exists public.assessment_roles;
+drop table if exists public.assessments;
+```
+
+---
+
 # CHANGELOG
 
 The running record of every database change to SQEPify: what changed and why, the

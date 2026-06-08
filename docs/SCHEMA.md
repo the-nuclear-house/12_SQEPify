@@ -164,3 +164,12 @@ Which trainings make up the learning path for a competency at each level. One ro
 (competency, level 2 to 5, training). The trainings are chosen explicitly by staff in the
 competency's learning path, not derived from training bands. Read and write are staff-only.
 Per-level descriptions ("what this level means") live in `competency_level_paths.actions`.
+
+## assessments, assessment_roles
+
+An assessment is one run of the consultant workflow. `assessments` holds the consultant, a
+`status` that moves through draft → self_assessment → validation → planning → plan_review →
+delivered (or cancelled), and an 18-month `horizon_months`. `assessment_roles` records the
+role-based roles chosen for it; Base Nuclear always applies and is not stored. Staff
+(`is_staff()`) manage assessments; a consultant can read their own (matched via
+`users.consultant_id`). Scores and the generated plan are added in later steps.

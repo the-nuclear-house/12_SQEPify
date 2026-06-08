@@ -1300,3 +1300,35 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 /* Learning path: edit/delete row + add-training select */
 .lp-actions { display: flex; gap: 12px; align-items: center; margin: 0 0 16px; }
 .lp-add-training { margin-top: 8px; cursor: pointer; }
+
+/* Assessment stepper */
+.stepper {
+  display: flex; list-style: none; padding: 0; margin: 0 0 20px; gap: 6px; flex-wrap: wrap;
+}
+.stepper .step {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+}
+.stepper .step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700;
+  background: var(--surface-3); color: var(--text-muted); flex-shrink: 0;
+}
+.stepper .step-label { font-size: 13px; color: var(--text-muted); }
+.stepper .step.active { border-color: var(--accent); background: rgba(0,174,239,0.08); }
+.stepper .step.active .step-num { background: var(--accent); color: #06121b; }
+.stepper .step.active .step-label { color: var(--text); font-weight: 600; }
+.stepper .step.done .step-num { background: var(--brand-green); color: #06121b; }
+
+.panel-title { margin: 0 0 6px; font-size: 18px; }
+.role-pick { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; }
+.role-pick-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.role-pick-row.locked { cursor: default; opacity: 0.9; }
+.role-pick-name { font-weight: 500; display: inline-flex; align-items: center; }
+.role-pick-tag { margin-left: auto; font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
+.setup-saved { margin-top: 12px; }
