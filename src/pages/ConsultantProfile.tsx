@@ -31,12 +31,6 @@ function stepIndex(status: Assessment['status'] | null): number {
   }
 }
 
-function nuclearisation(comps: CompetencyScore[]): number {
-  const got = comps.reduce((s, c) => s + Math.min(c.current, c.target), 0);
-  const need = comps.reduce((s, c) => s + c.target, 0);
-  return need === 0 ? 0 : got / need;
-}
-
 // ---------------- Filling figure ----------------
 function Figure({ progress, full }: { progress: number; full: boolean }) {
   const [mounted, setMounted] = useState(false);
@@ -155,13 +149,12 @@ export default function ConsultantProfile() {
   const [roleQuery, setRoleQuery] = useState('');
   const [roleOpen, setRoleOpen] = useState(false);
   const roleInputRef = useRef<HTMLInputElement>(null);
+  const [selfScores, setSelfScores] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalStep, setModalStep] = useState<number | null>(null);
 
-  // Real assessed competencies and plan will populate these once those steps are built.
-  const competencies: CompetencyScore[] = [];
   const trainings: PlannedTraining[] = [];
 
   async function load() {
@@ -231,9 +224,39 @@ export default function ConsultantProfile() {
     || consultant?.email || 'Consultant';
   const current = stepIndex(assessment?.status ?? null);
 
-  const progress = competencies.length ? nuclearisation(competencies) : 0;
+  // Live competency picture from the scores collected so far.
+  const liveComps = useMemo(() => applicable.map((c) => {
+    const sc = scoreByComp[c.id];
+    const cur = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0;
+    return { id: c.id, name: c.name, category: c.category, current: cur, required: c.required };
+  }), [applicable, scoreByComp]);
+  const hasScores = useMemo(() => liveComps.some((c) => c.current > 0), [liveComps]);
+
+  // Radar aggregates to category level so it stays readable.
+  const radarData: CompetencyScore[] = useMemo(() => {
+    const byCat = new Map<string, { cur: number; tgt: number; n: number }>();
+    liveComps.forEach((c) => {
+      const k = c.category || 'Other';
+      const e = byCat.get(k) ?? { cur: 0, tgt: 0, n: 0 };
+      e.cur += c.current; e.tgt += c.required; e.n += 1;
+      byCat.set(k, e);
+    });
+    return [...byCat.entries()].map(([competency, e]) => ({ competency, current: e.cur / e.n, target: e.tgt / e.n }));
+  }, [liveComps]);
+
+  const progress = useMemo(() => {
+    const need = liveComps.reduce((s, c) => s + c.required, 0);
+    const got = liveComps.reduce((s, c) => s + Math.min(c.current, c.required), 0);
+    return need === 0 ? 0 : got / need;
+  }, [liveComps]);
   const pct = Math.round(progress * 100);
   const full = progress >= 1;
+
+  // Applicable competencies grouped by category, for the self-assessment list.
+  const selfGroups = useMemo(
+    () => cats.map((cat) => ({ name: cat.name, items: applicable.filter((c) => c.category === cat.name) })).filter((g) => g.items.length),
+    [cats, applicable],
+  );
 
   const toggle = (rid: string) => setSelected((s) => (s.includes(rid) ? s.filter((x) => x !== rid) : [...s, rid]));
 
@@ -258,6 +281,32 @@ export default function ConsultantProfile() {
   }
 
   function openSetup() { setSetupWiz(0); setModalStep(0); }
+
+  const isSelf = user?.product_role === 'consultant' && !!user?.consultant_id && String(user.consultant_id) === String(id);
+  const needsSelf = isSelf && assessment?.status === 'self_assessment';
+  const autoRef = useRef(false);
+  useEffect(() => {
+    if (!loading && needsSelf && !autoRef.current) { autoRef.current = true; setModalStep(1); }
+  }, [loading, needsSelf]);
+
+  useEffect(() => {
+    if (modalStep === 1) {
+      const seed: Record<string, number> = {};
+      applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.self_level ?? sc?.ai_level ?? 0; });
+      setSelfScores(seed);
+    }
+  }, [modalStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submitSelf() {
+    if (!assessment) return;
+    setSaving(true); setError(null);
+    const rows = applicable.map((c) => ({ assessment_id: assessment.id, competency_id: c.id, self_level: selfScores[c.id] ?? 0 }));
+    const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
+    if (upErr) { setError(upErr.message); setSaving(false); return; }
+    const { error } = await supabase.from('assessments').update({ status: 'validation' }).eq('id', assessment.id);
+    if (error) setError(error.message);
+    setSaving(false); setModalStep(null); load();
+  }
 
   function readFile(file: File): Promise<{ file_base64?: string; media_type?: string; text?: string }> {
     return new Promise((resolve, reject) => {
@@ -379,13 +428,13 @@ export default function ConsultantProfile() {
       <div className="profile-lower">
         <div className="card radar-card">
           <h2>Competency map</h2>
-          {competencies.length ? (
+          {hasScores ? (
             <>
-              <Radar comps={competencies} />
-              <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target ({TARGET} stars)</span></div>
+              <Radar comps={radarData} />
+              <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
             </>
           ) : (
-            <EmptyViz title="Not assessed yet" hint="Run the Nuclearisation process to map their competency levels here." />
+            <EmptyViz title="Not assessed yet" hint="Map fills in once the consultant completes their self-assessment." />
           )}
         </div>
         <div className="card gantt-card">
@@ -464,7 +513,7 @@ export default function ConsultantProfile() {
 
               {setupWiz === 1 && (
                 <>
-                  <p className="muted">Upload the consultant's CV. The AI reads it against the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} now in scope and proposes a starting level for each. PDF, Word, image or text.</p>
+                  <p className="muted">Optional head-start: upload the consultant's CV and the AI proposes a starting level for each of the {applicable.length} competenc{applicable.length === 1 ? 'y' : 'ies'} in scope, which the consultant then reviews. Skip it and they self-assess from scratch. PDF, Word, image or text.</p>
                   <FileDropzone
                     className="cv-drop"
                     accept=".pdf,.doc,.docx,.txt,.md,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -496,9 +545,7 @@ export default function ConsultantProfile() {
 
                   <div className="wiz-foot">
                     <button className="btn btn-ghost" onClick={() => setSetupWiz(0)}>Back</button>
-                    <button className="btn btn-primary wiz-next" onClick={() => setSetupWiz(2)}>
-                      {scores.some((s) => s.ai_level != null) ? 'Continue' : 'Skip for now'}
-                    </button>
+                    <button className="btn btn-primary wiz-next" onClick={() => setSetupWiz(2)}>Continue</button>
                   </div>
                 </>
               )}
@@ -524,13 +571,58 @@ export default function ConsultantProfile() {
         </div>
       )}
 
-      {modalStep !== null && modalStep > 0 && (
+      {/* Self-assessment */}
+      {modalStep === 1 && (
+        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Self-assessment</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
+            <div className="modal-step">
+              {!assessment ? (
+                <p className="muted">Set-up has to be completed first.</p>
+              ) : applicable.length === 0 ? (
+                <p className="muted">No competencies in scope yet. Add roles in Set-up.</p>
+              ) : (
+                <>
+                  <p className="muted">Rate each competency honestly against the 0–5 scale. Where the AI proposed a level from the CV it's shown as a starting point; adjust it to reflect reality. When you submit, it goes to the Technical Director to review.</p>
+                  <div className="sa-list">
+                    {selfGroups.map((g) => (
+                      <div className="sa-group" key={g.name}>
+                        <div className="sa-cat">{g.name}</div>
+                        {g.items.map((c) => {
+                          const ai = scoreByComp[c.id]?.ai_level;
+                          return (
+                            <div className="sa-row" key={c.id}>
+                              <div className="sa-name">{c.name}{ai != null && <span className="sa-ai">AI suggested {ai}</span>}</div>
+                              <StarRating value={selfScores[c.id] ?? 0} onChange={(v) => setSelfScores((s) => ({ ...s, [c.id]: v }))} showLabel={false} size="sm" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn btn-primary btn-block" onClick={submitSelf} disabled={saving}>
+                    {saving ? 'Submitting…' : 'Submit for review'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalStep !== null && modalStep > 1 && (
         <div className="modal-overlay" onClick={() => setModalStep(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>{STEPS[modalStep]}</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
             <div className="modal-step"><p className="muted">This step is being built next.</p></div>
           </div>
         </div>
+      )}
+
+      {needsSelf && modalStep !== 1 && (
+        <button className="self-nudge" onClick={() => setModalStep(1)}>
+          <span className="self-nudge-dot" />Complete your self-assessment
+        </button>
       )}
     </div>
   );
