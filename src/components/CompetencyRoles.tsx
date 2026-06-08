@@ -195,7 +195,7 @@ export default function CompetencyRoles() {
                           {items.map((c) => (
                             <span className="comp-chip" key={c.id}>
                               {c.name}
-                              <StarRating value={reqByComp[c.id] ?? 4} onChange={(n) => setLevel(c, n)} />
+                              <StarRating value={reqByComp[c.id] ?? 4} onChange={(n) => setLevel(c, n)} showLabel={false} />
                               <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
                             </span>
                           ))}
