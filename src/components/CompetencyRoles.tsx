@@ -43,7 +43,7 @@ export default function CompetencyRoles() {
       setSubs((s.data as CompetencySubcategory[]) ?? []);
       setComps((k.data as Competency[]) ?? []);
       setRc((j.data as RoleCompetency[]) ?? []);
-      setSelectedRoleId((prev) => prev && rs.some((x) => x.id === prev) ? prev : rs[0]?.id ?? null);
+      setSelectedRoleId((prev) => (prev && rs.some((x) => x.id === prev) ? prev : null));
     }
     setLoading(false);
   }
@@ -143,27 +143,15 @@ export default function CompetencyRoles() {
     <div>
       {error && <p className="sync-msg err">{error}</p>}
 
-      <div className="sub-tabs role-tabs">
-        {roles.map((r) => (
-          <button
-            key={r.id}
-            className={r.id === selectedRoleId ? 'sub-tab active' : 'sub-tab'}
-            onClick={() => setSelectedRoleId(r.id)}
-          >
-            {r.is_base && <span className="base-tag">BASE</span>}
-            {r.name}
-            <span className="sub-count">{count(r.id)}</span>
-          </button>
-        ))}
-        <button className="sub-tab add" onClick={() => { setRoleName(''); setRoleModal({ mode: 'new' }); }}>+ Add role</button>
-      </div>
-
       {loading ? (
         <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>
       ) : selectedRole ? (
         <section className="comp-cat">
           <header className="comp-cat-head">
-            <h2>{selectedRole.is_base && <span className="base-tag">BASE</span>}{selectedRole.name}</h2>
+            <h2>
+              <button className="back-link" onClick={() => setSelectedRoleId(null)}>← All roles</button>
+              {selectedRole.is_base && <span className="base-tag">BASE</span>}{selectedRole.name}
+            </h2>
             <div className="tree-actions">
               {!selectedRole.is_base && (
                 <>
@@ -205,7 +193,21 @@ export default function CompetencyRoles() {
           </div>
         </section>
       ) : (
-        <div className="card"><p className="muted">No roles found. The Base Nuclear role should exist; if not, re-run the roles SQL.</p></div>
+        <div className="role-card-grid">
+          {roles.map((r) => (
+            <button className="role-card" key={r.id} onClick={() => setSelectedRoleId(r.id)}>
+              <div className="role-card-top">
+                {r.is_base && <span className="base-tag">BASE</span>}
+                <span className="role-card-name">{r.name}</span>
+              </div>
+              <span className="role-card-count">{count(r.id)} {count(r.id) === 1 ? 'competency' : 'competencies'}</span>
+            </button>
+          ))}
+          <button className="role-card role-card-add" onClick={() => { setRoleName(''); setRoleModal({ mode: 'new' }); }}>
+            <span className="plus">+</span>
+            <span>Add role</span>
+          </button>
+        </div>
       )}
 
       {/* add / rename role modal */}

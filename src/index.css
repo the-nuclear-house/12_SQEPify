@@ -1077,3 +1077,41 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 
 /* Add-competencies card sits on its own row in a role */
 .add-row-grid { margin-top: 14px; }
+
+/* Roles as half-width cards, two per row */
+.role-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.role-card {
+  display: flex; flex-direction: column; gap: 10px; text-align: left;
+  min-height: 92px; padding: 18px 20px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brand-cyan);
+  border-radius: var(--radius);
+  cursor: pointer; transition: border-color .15s, transform .1s, background .15s;
+}
+.role-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.role-card-top { display: flex; align-items: center; gap: 10px; }
+.role-card-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.role-card-count {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.role-card-add {
+  align-items: center; justify-content: center; gap: 4px;
+  background: transparent; border: 1px dashed var(--slate); border-left: 1px dashed var(--slate);
+  color: var(--text-muted); font-weight: 500;
+}
+.role-card-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); transform: none; }
+.role-card-add .plus { font-size: 24px; line-height: 1; color: var(--accent); }
+
+.back-link {
+  border: none; background: transparent; color: var(--accent);
+  font-size: 13px; cursor: pointer; padding: 0; margin-right: 14px; font-weight: 500;
+}
+.back-link:hover { text-decoration: underline; }
+
+@media (max-width: 640px) { .role-card-grid { grid-template-columns: 1fr; } }
