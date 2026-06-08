@@ -1426,3 +1426,26 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .role-pick-name { font-weight: 500; display: inline-flex; align-items: center; }
 .role-pick-tag { margin-left: auto; font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
 .setup-saved { margin-top: 12px; }
+
+/* Consultant profile */
+.back-link { display: inline-block; font-size: 13px; color: var(--text-muted); text-decoration: none; margin-bottom: 6px; }
+.back-link:hover { color: var(--accent); }
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 16px; align-items: start; }
+.card-hint { font-size: 12px; margin: -2px 0 12px; }
+.info-list { margin: 8px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.info-list div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border-soft); padding-bottom: 8px; }
+.info-list div:last-child { border-bottom: none; padding-bottom: 0; }
+.info-list dt { color: var(--text-faint); font-size: 12px; }
+.info-list dd { margin: 0; font-size: 13px; color: var(--text); text-align: right; }
+.skill-chip {
+  display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 999px;
+  background: var(--surface-3); border: 1px solid var(--border); font-size: 12px; color: var(--text-muted);
+}
+.assess-status { font-weight: 600; margin: 8px 0 4px; }
+.assess-missing { display: flex; align-items: center; gap: 8px; color: var(--text-muted); margin: 8px 0 14px; }
+.dot-missing { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+
+/* Clickable nuclearisation nodes */
+.nuke-node.clickable { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+.nuke-node.clickable .nuke-dot { transition: transform 0.12s ease; }
+.nuke-node.clickable:hover .nuke-dot { transform: scale(1.12); }

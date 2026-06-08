@@ -1,6 +1,7 @@
 interface Props {
   steps: string[];
   current: number; // index of the active step
+  onSelect?: (idx: number) => void;
 }
 
 // Deterministic spread of particles so the flow looks organic without randomness on each render.
@@ -11,7 +12,7 @@ const PARTICLES = Array.from({ length: 10 }, (_, i) => ({
   size: 3 + (i % 3),
 }));
 
-export default function NuclearisationProcess({ steps, current }: Props) {
+export default function NuclearisationProcess({ steps, current, onSelect }: Props) {
   const n = steps.length;
   const pct = n > 1 ? Math.max(0, Math.min(current, n - 1)) / (n - 1) * 100 : 0;
   const complete = current >= n - 1;
@@ -44,15 +45,18 @@ export default function NuclearisationProcess({ steps, current }: Props) {
         <div className="nuke-nodes">
           {steps.map((s, idx) => {
             const state = idx < current ? 'done' : idx === current ? 'active' : 'todo';
+            const Tag: any = onSelect ? 'button' : 'div';
             return (
-              <div
+              <Tag
                 key={s}
-                className={`nuke-node ${state}`}
+                type={onSelect ? 'button' : undefined}
+                className={`nuke-node ${state}${onSelect ? ' clickable' : ''}`}
                 style={{ left: `${n > 1 ? (idx / (n - 1)) * 100 : 0}%` }}
+                onClick={onSelect ? () => onSelect(idx) : undefined}
               >
                 <span className="nuke-dot">{idx < current ? '✓' : idx + 1}</span>
                 <span className="nuke-label">{s}</span>
-              </div>
+              </Tag>
             );
           })}
         </div>

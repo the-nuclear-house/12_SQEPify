@@ -5,13 +5,17 @@ import { useAuth } from '../auth/AuthProvider';
 import NuclearisationProcess from '../components/NuclearisationProcess';
 import type { Consultant, Role, Assessment, AssessmentRole } from '../lib/types';
 
-const STEPS = [
-  { key: 'setup', label: 'Set-up' },
-  { key: 'self', label: 'Self-assessment' },
-  { key: 'validation', label: 'Validation' },
-  { key: 'plan', label: 'Plan' },
-  { key: 'done', label: 'Nuclearised' },
-];
+const STEPS = ['Set-up', 'Self-assessment', 'Validation', 'Plan', 'Nuclearised'];
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Set-up in progress',
+  self_assessment: 'With consultant for self-assessment',
+  validation: 'Awaiting your validation',
+  planning: 'Generating plan',
+  plan_review: 'Plan in review',
+  delivered: 'Nuclearised',
+  cancelled: 'Cancelled',
+};
 
 function stepIndex(status: Assessment['status'] | null): number {
   switch (status) {
@@ -20,7 +24,7 @@ function stepIndex(status: Assessment['status'] | null): number {
     case 'planning':
     case 'plan_review': return 3;
     case 'delivered': return 4;
-    default: return 0; // draft / none / cancelled
+    default: return 0;
   }
 }
 
@@ -35,6 +39,7 @@ export default function ConsultantProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modalStep, setModalStep] = useState<number | null>(null);
 
   async function load() {
     if (!id) return;
@@ -64,6 +69,7 @@ export default function ConsultantProfile() {
 
   const baseRole = useMemo(() => roles.find((r) => r.is_base) ?? null, [roles]);
   const otherRoles = useMemo(() => roles.filter((r) => !r.is_base), [roles]);
+  const roleName = (rid: string) => roles.find((r) => r.id === rid)?.name ?? '';
   const name = consultant?.full_name
     || [consultant?.first_name, consultant?.last_name].filter(Boolean).join(' ')
     || consultant?.email
@@ -82,8 +88,7 @@ export default function ConsultantProfile() {
       const { data, error } = await supabase
         .from('assessments')
         .insert({ consultant_id: id, created_by: user?.id ?? null })
-        .select('*')
-        .single();
+        .select('*').single();
       if (error) { setError(error.message); setSaving(false); return; }
       aid = (data as Assessment).id;
       setAssessment(data as Assessment);
@@ -95,63 +100,118 @@ export default function ConsultantProfile() {
       if (error) setError(error.message);
     }
     setSaving(false);
+    setModalStep(null);
     load();
   }
 
   if (loading) return <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>;
   if (!consultant) return <div className="card"><p className="muted" style={{ padding: 16 }}>Consultant not found. <Link to="/consultants">Back to consultants</Link></p></div>;
 
+  const skills = consultant.engineering_skills ?? [];
+
   return (
     <div>
       <div className="page-head">
         <Link className="back-link" to="/consultants">← Consultants</Link>
         <h1>{name}</h1>
-        <p>
-          {consultant.job_title ? `${consultant.job_title} · ` : ''}
-          {consultant.td_full_name ? `TD: ${consultant.td_full_name}` : 'No Technical Director set'}
-        </p>
+        <p>{consultant.job_title ? consultant.job_title : 'Consultant'}{consultant.is_active ? '' : ' · Leaver'}</p>
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}
 
-      <NuclearisationProcess steps={STEPS.map((s) => s.label)} current={current} />
+      <NuclearisationProcess steps={STEPS} current={current} onSelect={(i) => setModalStep(i)} />
 
-      {current === 0 ? (
+      <div className="profile-grid">
         <div className="card">
-          <h2 className="panel-title">Set-up</h2>
-          <p className="muted">
-            Choose the roles this consultant is assessed against. Base Nuclear always applies; add any
-            role-based competencies on top. The CV upload and AI assessment come next.
-          </p>
+          <h2 className="panel-title">Details</h2>
+          <dl className="info-list">
+            <div><dt>Email</dt><dd>{consultant.company_email || consultant.email}</dd></div>
+            <div><dt>Technical Director</dt><dd>{consultant.td_full_name || 'Not set'}</dd></div>
+            <div><dt>Status</dt><dd>{consultant.is_active ? 'Active' : 'Left'}</dd></div>
+            <div><dt>Last synced</dt><dd>{new Date(consultant.last_seen_at).toLocaleDateString('en-GB')}</dd></div>
+          </dl>
+        </div>
 
-          <div className="role-pick">
-            {baseRole && (
-              <label className="role-pick-row locked">
-                <input type="checkbox" checked readOnly />
-                <span className="role-pick-name"><span className="base-tag">BASE</span>{baseRole.name}</span>
-                <span className="role-pick-tag">Always applies</span>
-              </label>
-            )}
-            {otherRoles.length === 0 && <p className="muted">No role-based roles defined yet.</p>}
-            {otherRoles.map((r) => (
-              <label className="role-pick-row" key={r.id}>
-                <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
-                <span className="role-pick-name">{r.name}</span>
-              </label>
-            ))}
-          </div>
-
-          <button className="btn btn-primary" onClick={saveSetup} disabled={saving}>
-            {saving ? 'Saving…' : assessment ? 'Save roles' : 'Start assessment'}
-          </button>
-          {assessment && (
-            <p className="muted setup-saved">Assessment started. CV upload and AI assessment are the next build.</p>
+        <div className="card">
+          <h2 className="panel-title">Skills</h2>
+          <p className="muted card-hint">From the Control Room.</p>
+          {skills.length === 0 ? (
+            <p className="muted">No skills listed.</p>
+          ) : (
+            <div className="chip-wrap">
+              {skills.map((s, i) => <span className="skill-chip" key={i}>{s}</span>)}
+            </div>
           )}
         </div>
-      ) : (
+
         <div className="card">
-          <h2 className="panel-title">{STEPS[current].label}</h2>
-          <p className="muted">This step is being built next.</p>
+          <h2 className="panel-title">Assessment</h2>
+          {!assessment ? (
+            <>
+              <p className="assess-missing"><span className="dot-missing" />No assessment yet</p>
+              <button className="btn btn-primary" onClick={() => setModalStep(0)}>Start assessment</button>
+            </>
+          ) : (
+            <>
+              <p className="assess-status">{STATUS_LABEL[assessment.status] ?? assessment.status}</p>
+              <p className="muted card-hint">
+                Roles: Base Nuclear{selected.length ? ', ' + selected.map(roleName).join(', ') : ''}
+              </p>
+              <button className="btn btn-sm" onClick={() => setModalStep(0)}>Open set-up</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Set-up modal */}
+      {modalStep === 0 && (
+        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+          <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Set-up</h2>
+              <button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button>
+            </div>
+            <div className="modal-step">
+              <p className="muted">
+                Choose the roles this consultant is assessed against. Base Nuclear always applies; add any
+                role-based competencies on top. The CV upload and AI assessment come next.
+              </p>
+              <div className="role-pick">
+                {baseRole && (
+                  <label className="role-pick-row locked">
+                    <input type="checkbox" checked readOnly />
+                    <span className="role-pick-name"><span className="base-tag">BASE</span>{baseRole.name}</span>
+                    <span className="role-pick-tag">Always applies</span>
+                  </label>
+                )}
+                {otherRoles.length === 0 && <p className="muted">No role-based roles defined yet.</p>}
+                {otherRoles.map((r) => (
+                  <label className="role-pick-row" key={r.id}>
+                    <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
+                    <span className="role-pick-name">{r.name}</span>
+                  </label>
+                ))}
+              </div>
+              <button className="btn btn-primary btn-block" onClick={saveSetup} disabled={saving}>
+                {saving ? 'Saving…' : assessment ? 'Save roles' : 'Start assessment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Placeholder modals for steps still to build */}
+      {modalStep !== null && modalStep > 0 && (
+        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{STEPS[modalStep]}</h2>
+              <button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button>
+            </div>
+            <div className="modal-step">
+              <p className="muted">This step is being built next.</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
