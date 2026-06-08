@@ -38,31 +38,47 @@ async function fetchAppUser(email: string | undefined): Promise<AppUser | null> 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Only update the session here. Crucially, do NOT call other supabase methods
+  // (or await anything) inside this callback: the client holds an internal lock
+  // during auth events, and calling back into it here can deadlock the whole app.
   useEffect(() => {
-    let active = true;
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      setUser(await fetchAppUser(data.session?.user.email));
-      setLoading(false);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
-      if (!active) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
-      setUser(await fetchAppUser(next?.user.email));
+      setAuthReady(true);
+    });
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Load the app user separately, whenever the signed-in email changes. This runs
+  // outside the auth callback, so it cannot deadlock. A background token refresh
+  // does not change the email, so it does not trigger a refetch.
+  const email = session?.user?.email;
+  useEffect(() => {
+    if (!authReady) return;
+    let active = true;
+    if (!email) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchAppUser(email).then((u) => {
+      if (!active) return;
+      setUser(u);
       setLoading(false);
     });
-
     return () => {
       active = false;
-      sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [authReady, email]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -80,8 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
       },
     }),
     [session, user, loading],
