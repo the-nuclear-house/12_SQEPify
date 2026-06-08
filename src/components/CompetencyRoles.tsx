@@ -171,12 +171,12 @@ export default function CompetencyRoles() {
                 {Object.entries(bySub).map(([subId, items]) => (
                   <div className="role-grp-sub-block" key={subId}>
                     {subId !== 'none' && <div className="role-grp-sub">{subsById[subId]?.name ?? ''}</div>}
-                    <div className="comp-grid">
+                    <div className="chip-wrap">
                       {items.map((c) => (
-                        <div className="comp-card role-comp" key={c.id}>
-                          <span className="c-name">{c.name}</span>
-                          <button className="link-btn danger role-remove" onClick={() => toggleComp(c)}>Remove</button>
-                        </div>
+                        <span className="comp-chip" key={c.id}>
+                          {c.name}
+                          <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
+                        </span>
                       ))}
                     </div>
                   </div>
@@ -184,12 +184,7 @@ export default function CompetencyRoles() {
               </div>
             ))}
 
-            <div className="comp-grid add-row-grid">
-              <button className="comp-card comp-add" onClick={() => setBrowseOpen(true)}>
-                <span className="plus">+</span>
-                <span>Add competencies</span>
-              </button>
-            </div>
+            <button className="add-comp-btn" onClick={() => setBrowseOpen(true)}>+ Add competencies</button>
           </div>
         </section>
       ) : (

@@ -1115,3 +1115,28 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .back-link:hover { text-decoration: underline; }
 
 @media (max-width: 640px) { .role-card-grid { grid-template-columns: 1fr; } }
+
+/* Role competencies as chips */
+.role-grp { margin-bottom: 22px; }
+.role-grp-sub-block { margin-bottom: 12px; }
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.comp-chip {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 8px 8px 8px 14px;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--text);
+}
+.chip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border: none; border-radius: 50%;
+  background: rgba(255,255,255,0.06); color: var(--text-faint);
+  font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+}
+.chip-x:hover { background: rgba(207,90,10,0.18); color: var(--danger); }
+.add-comp-btn {
+  margin-top: 8px;
+  border: 1px dashed var(--slate); background: transparent;
+  color: var(--accent); font-size: 13px; font-weight: 600;
+  padding: 10px 18px; border-radius: 999px; cursor: pointer;
+}
+.add-comp-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
