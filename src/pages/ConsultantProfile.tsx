@@ -151,6 +151,7 @@ export default function ConsultantProfile() {
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
+  const [roleQuery, setRoleQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -411,22 +412,38 @@ export default function ConsultantProfile() {
               {setupWiz === 0 && (
                 <>
                   <p className="muted">Which roles is this consultant assessed against? Base Nuclear always applies; add any role-based competencies on top.</p>
-                  <div className="role-pick">
-                    {baseRole && (
-                      <div className="role-pick-row locked">
-                        <span className="role-pick-check">✓</span>
-                        <span className="role-pick-name">{baseRole.name}</span>
-                        <span className="role-pick-tag">Always applies</span>
-                      </div>
-                    )}
-                    {otherRoles.length === 0 && <p className="muted">No role-based roles defined yet.</p>}
-                    {otherRoles.map((r) => (
-                      <label className={`role-pick-row${selected.includes(r.id) ? ' on' : ''}`} key={r.id}>
-                        <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
-                        <span className="role-pick-name">{r.name}</span>
-                      </label>
+
+                  <div className="role-chips">
+                    {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
+                    {selected.map((rid) => (
+                      <span className="role-chip" key={rid}>{roleName(rid)}
+                        <button className="role-chip-x" onClick={() => toggle(rid)} aria-label={`Remove ${roleName(rid)}`}>×</button>
+                      </span>
                     ))}
+                    {selected.length === 0 && <span className="muted role-chip-hint">No extra roles yet</span>}
                   </div>
+
+                  {otherRoles.length === 0 ? (
+                    <p className="muted">No role-based roles defined yet.</p>
+                  ) : (
+                    <>
+                      <input className="field role-search" placeholder={`Search ${otherRoles.length} roles…`} value={roleQuery} onChange={(e) => setRoleQuery(e.target.value)} />
+                      <div className="role-list">
+                        {otherRoles
+                          .filter((r) => r.name.toLowerCase().includes(roleQuery.trim().toLowerCase()))
+                          .map((r) => (
+                            <label className={`role-pick-row${selected.includes(r.id) ? ' on' : ''}`} key={r.id}>
+                              <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
+                              <span className="role-pick-name">{r.name}</span>
+                            </label>
+                          ))}
+                        {otherRoles.filter((r) => r.name.toLowerCase().includes(roleQuery.trim().toLowerCase())).length === 0 && (
+                          <p className="muted role-list-empty">No roles match “{roleQuery}”.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
                   <div className="wiz-foot">
                     <button className="btn btn-primary wiz-next" onClick={saveSetup} disabled={saving}>
                       {saving ? 'Saving…' : 'Save and continue'}
