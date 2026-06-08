@@ -1152,3 +1152,14 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .role-cat-card .role-grp-sub-block { margin-bottom: 10px; }
 .role-cat-card .role-grp-sub-block:last-child { margin-bottom: 0; }
 .role-cat-card .chip-wrap { margin-top: 6px; }
+
+/* Override: category cards as a stretch-to-fill grid (no wasted right-hand space) */
+.role-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  column-width: auto;
+  align-items: start;
+  margin-bottom: 12px;
+}
+.role-cat-card { display: block; width: auto; margin-bottom: 0; break-inside: auto; }
