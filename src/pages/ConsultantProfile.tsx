@@ -37,14 +37,15 @@ function nuclearisation(comps: CompetencyScore[]): number {
 function Figure({ progress, full }: { progress: number; full: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id); }, []);
-  const top = 24, bottom = 300, height = bottom - top;
+  const top = 24, bottom = 308, height = bottom - top;
   const waterline = bottom - progress * height;
+  const BODY = 'M80,88 C66,92 58,104 54,120 C40,150 30,235 28,294 Q27,308 41,308 L159,308 Q173,308 172,294 C170,235 160,150 146,120 C142,104 134,92 120,88 Q100,84 80,88 Z';
   return (
-    <svg className="fig-svg" viewBox="0 0 200 320" xmlns="http://www.w3.org/2000/svg">
+    <svg className="fig-svg" viewBox="0 0 200 346" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <clipPath id="figClip">
-          <circle cx="100" cy="64" r="40" />
-          <path d="M100,100 C125,100 140,112 150,135 L168,300 L32,300 L50,135 C60,112 75,100 100,100 Z" />
+          <circle cx="100" cy="54" r="28" />
+          <path d={BODY} />
         </clipPath>
         <linearGradient id="figWater" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#36d3c4" /><stop offset="100%" stopColor="#84c341" />
@@ -54,16 +55,22 @@ function Figure({ progress, full }: { progress: number; full: boolean }) {
         </filter>
       </defs>
       <g clipPath="url(#figClip)">
-        <rect x="0" y="0" width="200" height="320" fill="#1b2430" />
+        <rect width="200" height="346" fill="#161e29" />
         <g style={{ transform: mounted ? 'translateY(0)' : `translateY(${height}px)`, transition: 'transform 1.7s cubic-bezier(.22,.61,.36,1)' }}>
-          <rect x="0" y={waterline} width="200" height={bottom - waterline + 40} fill="url(#figWater)" opacity="0.92" />
-          <path className="wave wave-a" d={`M0,${waterline} q25,-9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V320 H0 Z`} fill="#36d3c4" opacity="0.45" />
-          <path className="wave wave-b" d={`M0,${waterline + 4} q25,9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V320 H0 Z`} fill="#84c341" opacity="0.30" />
+          <rect x="0" y={waterline} width="200" height={bottom - waterline + 60} fill="url(#figWater)" opacity="0.9" />
+          <path className="wave wave-a" d={`M0,${waterline} q25,-9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V346 H0 Z`} fill="#36d3c4" opacity="0.45" />
+          <path className="wave wave-b" d={`M0,${waterline + 4} q25,9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V346 H0 Z`} fill="#84c341" opacity="0.30" />
         </g>
       </g>
-      <g fill="none" stroke="#36d3c4" strokeWidth="3" opacity={full ? 0.95 : 0.6} filter={full ? 'url(#figGlow)' : undefined}>
-        <circle cx="100" cy="64" r="40" />
-        <path d="M100,100 C125,100 140,112 150,135 L168,300 L32,300 L50,135 C60,112 75,100 100,100 Z" />
+      <g fill="none" stroke="#36d3c4" strokeWidth="3" strokeLinejoin="round" opacity={full ? 0.95 : 0.7} filter={full ? 'url(#figGlow)' : undefined}>
+        <circle cx="100" cy="54" r="28" />
+        <path d={BODY} />
+      </g>
+      <g transform="translate(100,210)" fill="none" stroke="#cdefff" strokeWidth="1.7" opacity="0.85">
+        <ellipse rx="23" ry="9" />
+        <ellipse rx="23" ry="9" transform="rotate(60)" />
+        <ellipse rx="23" ry="9" transform="rotate(120)" />
+        <circle r="2.8" fill="#cdefff" stroke="none" />
       </g>
     </svg>
   );
