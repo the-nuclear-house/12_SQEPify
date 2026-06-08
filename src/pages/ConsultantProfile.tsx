@@ -162,6 +162,7 @@ export default function ConsultantProfile() {
   const [roleOpen, setRoleOpen] = useState(false);
   const roleInputRef = useRef<HTMLInputElement>(null);
   const [selfScores, setSelfScores] = useState<Record<string, number>>({});
+  const [valScores, setValScores] = useState<Record<string, number>>({});
   const [drillCat, setDrillCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -308,6 +309,7 @@ export default function ConsultantProfile() {
   function openSetup() { setSetupWiz(0); setModalStep(0); }
 
   const isSelf = user?.product_role === 'consultant' && !!user?.consultant_id && String(user.consultant_id) === String(id);
+  const isStaff = user?.product_role === 'superadmin' || user?.product_role === 'technical_director';
   const needsSelf = isSelf && assessment?.status === 'self_assessment';
   const autoRef = useRef(false);
   useEffect(() => {
@@ -320,7 +322,23 @@ export default function ConsultantProfile() {
       applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.self_level ?? sc?.ai_level ?? 0; });
       setSelfScores(seed);
     }
+    if (modalStep === 2) {
+      const seed: Record<string, number> = {};
+      applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0; });
+      setValScores(seed);
+    }
   }, [modalStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submitValidation() {
+    if (!assessment) return;
+    setSaving(true); setError(null);
+    const rows = applicable.map((c) => ({ assessment_id: assessment.id, competency_id: c.id, validated_level: valScores[c.id] ?? 0 }));
+    const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
+    if (upErr) { setError(upErr.message); setSaving(false); return; }
+    const { error } = await supabase.from('assessments').update({ status: 'planning' }).eq('id', assessment.id);
+    if (error) setError(error.message);
+    setSaving(false); setModalStep(null); load();
+  }
 
   async function submitSelf() {
     if (!assessment) return;
@@ -649,7 +667,54 @@ export default function ConsultantProfile() {
         </div>
       )}
 
-      {modalStep !== null && modalStep > 1 && (
+      {/* Validation */}
+      {modalStep === 2 && (
+        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Validation</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
+            <div className="modal-step">
+              {!isStaff ? (
+                <p className="muted">Your Technical Director reviews your self-assessment and confirms your levels. There's nothing for you to do at this step.</p>
+              ) : !assessment ? (
+                <p className="muted">Set-up has to be completed first.</p>
+              ) : applicable.length === 0 ? (
+                <p className="muted">No competencies in scope yet.</p>
+              ) : (
+                <>
+                  <p className="muted">Review the consultant's self-assessment against the AI's read of the CV, adjust where needed, and set the validated level. This locks their current level for each competency and moves them into planning.</p>
+                  <div className="sa-list">
+                    {selfGroups.map((g) => (
+                      <div className="sa-group" key={g.name}>
+                        <div className="sa-cat">{g.name}</div>
+                        {g.items.map((c) => {
+                          const sc = scoreByComp[c.id];
+                          return (
+                            <div className="sa-row" key={c.id}>
+                              <div className="sa-name">{c.name}
+                                <span className="sa-ai">
+                                  {sc?.self_level != null ? `self ${sc.self_level}` : 'no self-assessment'}
+                                  {sc?.ai_level != null ? ` · AI ${sc.ai_level}` : ''}
+                                  {` · required ${c.required}`}
+                                </span>
+                              </div>
+                              <StarRating value={valScores[c.id] ?? 0} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel={false} size="sm" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn btn-primary btn-block" onClick={submitValidation} disabled={saving}>
+                    {saving ? 'Validating…' : 'Validate and move to planning'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalStep !== null && modalStep > 2 && (
         <div className="modal-overlay" onClick={() => setModalStep(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>{STEPS[modalStep]}</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
