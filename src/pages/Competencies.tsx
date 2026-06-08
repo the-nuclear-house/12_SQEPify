@@ -7,7 +7,12 @@ import type {
   CompetencySubcategory,
 } from '../lib/types';
 
-type EditNode = { kind: 'category' | 'subcategory'; id: string } | null;
+type NodeModal =
+  | { kind: 'category'; mode: 'new' }
+  | { kind: 'category'; mode: 'edit'; id: string }
+  | { kind: 'subcategory'; mode: 'new'; categoryId: string }
+  | { kind: 'subcategory'; mode: 'edit'; id: string }
+  | null;
 
 type CompModal =
   | { mode: 'new'; subcategoryId: string; categoryId: string }
@@ -30,13 +35,10 @@ export default function Competencies() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [newCat, setNewCat] = useState('');
-  const [addingSubFor, setAddingSubFor] = useState<string | null>(null);
-  const [subText, setSubText] = useState('');
   const [activeSub, setActiveSub] = useState<Record<string, string>>({});
 
-  const [edit, setEdit] = useState<EditNode>(null);
-  const [editName, setEditName] = useState('');
+  const [nodeModal, setNodeModal] = useState<NodeModal>(null);
+  const [nodeName, setNodeName] = useState('');
 
   const [modal, setModal] = useState<CompModal>(null);
   const [mName, setMName] = useState('');
@@ -85,27 +87,30 @@ export default function Competencies() {
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
     const { error } = await p;
     if (error) setError(error.message);
-    setEdit(null);
-    setAddingSubFor(null);
-    setSubText('');
+    setNodeModal(null);
+    setNodeName('');
     setModal(null);
     load();
   }
 
-  const addCategory = () => {
-    if (!newCat.trim()) return;
-    run(supabase.from('competency_categories').insert({ name: newCat.trim() }));
-    setNewCat('');
+  // ----- category / subcategory add + edit (all via modal) -----
+  function openAddCategory() { setNodeName(''); setNodeModal({ kind: 'category', mode: 'new' }); }
+  function openEditCategory(cat: CompetencyCategory) { setNodeName(cat.name); setNodeModal({ kind: 'category', mode: 'edit', id: cat.id }); }
+  function openAddSub(categoryId: string) { setNodeName(''); setNodeModal({ kind: 'subcategory', mode: 'new', categoryId }); }
+  function openEditSub(sub: CompetencySubcategory) { setNodeName(sub.name); setNodeModal({ kind: 'subcategory', mode: 'edit', id: sub.id }); }
+
+  const saveNode = () => {
+    if (!nodeModal || !nodeName.trim()) return;
+    const n = nodeName.trim();
+    if (nodeModal.kind === 'category') {
+      if (nodeModal.mode === 'new') run(supabase.from('competency_categories').insert({ name: n }));
+      else run(supabase.from('competency_categories').update({ name: n }).eq('id', nodeModal.id));
+    } else {
+      if (nodeModal.mode === 'new') run(supabase.from('competency_subcategories').insert({ category_id: nodeModal.categoryId, name: n }));
+      else run(supabase.from('competency_subcategories').update({ name: n }).eq('id', nodeModal.id));
+    }
   };
-  const addSubcategory = (categoryId: string) => {
-    if (!subText.trim()) return;
-    run(supabase.from('competency_subcategories').insert({ category_id: categoryId, name: subText.trim() }));
-  };
-  const renameNode = () => {
-    if (!edit || !editName.trim()) return;
-    const table = edit.kind === 'category' ? 'competency_categories' : 'competency_subcategories';
-    run(supabase.from(table).update({ name: editName.trim() }).eq('id', edit.id));
-  };
+
   const delNode = (kind: 'category' | 'subcategory', id: string, name: string) => {
     const table = kind === 'category' ? 'competency_categories' : 'competency_subcategories';
     setConfirm({
@@ -118,13 +123,12 @@ export default function Competencies() {
     });
   };
 
+  // ----- competency add / view / edit -----
   function openNew(categoryId: string, subcategoryId: string) {
     setMName(''); setMDesc(''); setMLevels({}); setShowLevels(false);
     setModal({ mode: 'new', categoryId, subcategoryId });
   }
-  function openView(comp: Competency) {
-    setModal({ mode: 'view', comp });
-  }
+  function openView(comp: Competency) { setModal({ mode: 'view', comp }); }
   function startEditComp(comp: Competency) {
     setMName(comp.name); setMDesc(comp.description ?? '');
     setMLevels(comp.level_descriptors ?? {});
@@ -139,8 +143,7 @@ export default function Competencies() {
     const level_descriptors = Object.keys(ld).length ? ld : null;
     if (modal.mode === 'new') {
       run(supabase.from('competencies').insert({
-        category_id: modal.categoryId,
-        subcategory_id: modal.subcategoryId,
+        category_id: modal.categoryId, subcategory_id: modal.subcategoryId,
         name: mName.trim(), description: mDesc.trim(), level_descriptors,
       }));
     } else {
@@ -158,117 +161,115 @@ export default function Competencies() {
     });
   };
 
-  const renameRow = (
-    <div className="rename-row">
-      <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus />
-      <button className="btn btn-sm btn-primary" onClick={renameNode} disabled={!editName.trim()}>Save</button>
-      <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
-    </div>
-  );
+  const nodeTitle = !nodeModal
+    ? ''
+    : `${nodeModal.mode === 'new' ? 'Add' : 'Edit'} ${nodeModal.kind === 'category' ? 'category' : 'subcategory'}`;
 
   return (
     <div>
-      <div className="page-head">
-        <h1>Nuclear Competencies</h1>
-        <p>
-          Category, then Subcategory, then Competency. Pick a subcategory tab to see its
-          competencies. Click a competency for its detail and star levels.
-        </p>
+      <div className="page-head with-action">
+        <div>
+          <h1>Nuclear Competencies</h1>
+          <p>
+            Category, then Subcategory, then Competency. Pick a subcategory tab to see its
+            competencies. Click a competency for its detail and star levels.
+          </p>
+        </div>
+        <button className="btn btn-primary head-action" onClick={openAddCategory}>+ Add category</button>
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}
 
       {loading ? (
         <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>
+      ) : cats.length === 0 ? (
+        <div className="card"><p className="muted">No categories yet. Use “Add category” to create the first one.</p></div>
       ) : (
-        <>
-          {cats.length === 0 && (
-            <div className="card"><p className="muted">No categories yet. Add the first one below.</p></div>
-          )}
-
-          {cats.map((cat) => {
-            const catSubs = subsByCat[cat.id] ?? [];
-            const active = activeSub[cat.id] ?? catSubs[0]?.id ?? null;
-            const activeSubObj = catSubs.find((s) => s.id === active) ?? null;
-            const activeComps = active ? compsBySub[active] ?? [] : [];
-            const catEditing = edit?.kind === 'category' && edit.id === cat.id;
-            const subEditing = edit?.kind === 'subcategory' && activeSubObj && edit.id === activeSubObj.id;
-            return (
-              <section className="comp-cat" key={cat.id}>
-                <header className="comp-cat-head">
-                  {catEditing ? renameRow : (
-                    <>
-                      <h2>{cat.name}</h2>
-                      <div className="tree-actions">
-                        <button className="link-btn" onClick={() => { setEdit({ kind: 'category', id: cat.id }); setEditName(cat.name); }}>Rename</button>
-                        <button className="link-btn danger" onClick={() => delNode('category', cat.id, cat.name)}>Delete</button>
-                      </div>
-                    </>
-                  )}
-                </header>
-
-                <div className="comp-cat-body">
-                  <div className="sub-tabs">
-                    {catSubs.map((sub) => (
-                      <button
-                        key={sub.id}
-                        className={sub.id === active ? 'sub-tab active' : 'sub-tab'}
-                        onClick={() => setActiveSub({ ...activeSub, [cat.id]: sub.id })}
-                      >
-                        {sub.name}
-                        <span className="sub-count">{(compsBySub[sub.id] ?? []).length}</span>
-                      </button>
-                    ))}
-                    {addingSubFor === cat.id ? (
-                      <span className="rename-row sub-add">
-                        <input className="field" value={subText} onChange={(e) => setSubText(e.target.value)} placeholder="Subcategory name" autoFocus />
-                        <button className="btn btn-sm btn-primary" onClick={() => addSubcategory(cat.id)} disabled={!subText.trim()}>Add</button>
-                        <button className="btn btn-sm btn-ghost" onClick={() => { setAddingSubFor(null); setSubText(''); }}>Cancel</button>
-                      </span>
-                    ) : (
-                      <button className="sub-tab add" onClick={() => { setAddingSubFor(cat.id); setSubText(''); }}>+ Subcategory</button>
-                    )}
-                  </div>
-
-                  {activeSubObj ? (
-                    <>
-                      <div className="sub-bar">
-                        {subEditing ? renameRow : (
-                          <div className="tree-actions">
-                            <button className="link-btn" onClick={() => { setEdit({ kind: 'subcategory', id: activeSubObj.id }); setEditName(activeSubObj.name); }}>Rename subcategory</button>
-                            <button className="link-btn danger" onClick={() => delNode('subcategory', activeSubObj.id, activeSubObj.name)}>Delete subcategory</button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="comp-grid">
-                        {activeComps.map((c) => (
-                          <button className="comp-card" key={c.id} onClick={() => openView(c)} title="View details">
-                            <span className="c-name">{c.name}</span>
-                          </button>
-                        ))}
-                        <button className="comp-card comp-add" onClick={() => openNew(cat.id, activeSubObj.id)}>
-                          <span className="plus">+</span><span>Add competency</span>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="muted" style={{ marginTop: 12 }}>Add a subcategory to start adding competencies.</p>
-                  )}
+        cats.map((cat) => {
+          const catSubs = subsByCat[cat.id] ?? [];
+          const active = activeSub[cat.id] ?? catSubs[0]?.id ?? null;
+          const activeSubObj = catSubs.find((s) => s.id === active) ?? null;
+          const activeComps = active ? compsBySub[active] ?? [] : [];
+          return (
+            <section className="comp-cat" key={cat.id}>
+              <header className="comp-cat-head">
+                <h2>{cat.name}</h2>
+                <div className="tree-actions">
+                  <button className="link-btn" onClick={() => openEditCategory(cat)}>Edit</button>
+                  <button className="link-btn danger" onClick={() => delNode('category', cat.id, cat.name)}>Delete</button>
                 </div>
-              </section>
-            );
-          })}
+              </header>
 
-          <div className="card add-category">
-            <label>Add a category</label>
-            <div className="add-row">
-              <input className="field" value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="e.g. Nuclear Safety" />
-              <button className="btn btn-primary" onClick={addCategory} disabled={!newCat.trim()}>Add category</button>
-            </div>
-          </div>
-        </>
+              <div className="comp-cat-body">
+                <div className="sub-tabs">
+                  {catSubs.map((sub) => (
+                    <button
+                      key={sub.id}
+                      className={sub.id === active ? 'sub-tab active' : 'sub-tab'}
+                      onClick={() => setActiveSub({ ...activeSub, [cat.id]: sub.id })}
+                    >
+                      {sub.name}
+                      <span className="sub-count">{(compsBySub[sub.id] ?? []).length}</span>
+                    </button>
+                  ))}
+                  <button className="sub-tab add" onClick={() => openAddSub(cat.id)}>+ Subcategory</button>
+                </div>
+
+                {activeSubObj ? (
+                  <>
+                    <div className="sub-bar">
+                      <div className="tree-actions">
+                        <button className="link-btn" onClick={() => openEditSub(activeSubObj)}>Edit subcategory</button>
+                        <button className="link-btn danger" onClick={() => delNode('subcategory', activeSubObj.id, activeSubObj.name)}>Delete subcategory</button>
+                      </div>
+                    </div>
+                    <div className="comp-grid">
+                      {activeComps.map((c) => (
+                        <button className="comp-card" key={c.id} onClick={() => openView(c)} title="View details">
+                          <span className="c-name">{c.name}</span>
+                        </button>
+                      ))}
+                      <button className="comp-card comp-add" onClick={() => openNew(cat.id, activeSubObj.id)}>
+                        <span className="plus">+</span><span>Add competency</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted" style={{ marginTop: 12 }}>Add a subcategory to start adding competencies.</p>
+                )}
+              </div>
+            </section>
+          );
+        })
       )}
 
+      {/* category / subcategory add + edit modal */}
+      {nodeModal && (
+        <div className="modal-overlay" onClick={() => setNodeModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{nodeTitle}</h2>
+              <button className="modal-close" onClick={() => setNodeModal(null)} aria-label="Close">×</button>
+            </div>
+            <div className="modal-step">
+              <label>Name</label>
+              <input
+                className="field"
+                autoFocus
+                value={nodeName}
+                onChange={(e) => setNodeName(e.target.value)}
+                placeholder={nodeModal.kind === 'category' ? 'e.g. Nuclear Safety & Culture' : 'e.g. Safety Case'}
+                onKeyDown={(e) => { if (e.key === 'Enter' && nodeName.trim()) saveNode(); }}
+              />
+              <button className="btn btn-primary btn-block" onClick={saveNode} disabled={!nodeName.trim()}>
+                {nodeModal.mode === 'new' ? 'Add' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* competency modal */}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
@@ -333,6 +334,7 @@ export default function Competencies() {
           </div>
         </div>
       )}
+
       {confirm && (
         <ConfirmDialog
           title={confirm.title}

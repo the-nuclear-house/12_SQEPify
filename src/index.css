@@ -1025,3 +1025,10 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn-danger:hover { background: #b94e09; border-color: #b94e09; }
+
+/* Page head with a top-right action button */
+.page-head.with-action { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.page-head.with-action .head-action { flex-shrink: 0; white-space: nowrap; margin-top: 4px; }
+@media (max-width: 640px) {
+  .page-head.with-action { flex-direction: column; }
+}
