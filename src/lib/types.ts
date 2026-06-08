@@ -109,3 +109,20 @@ export interface RoleCompetency {
   competency_id: string;
   created_at: string;
 }
+
+export interface Training {
+  id: string;
+  title: string;
+  competency_id: string;
+  from_level: number;
+  to_level: number;
+  duration_days: number | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface TrainingDeliverer {
+  training_id: string;
+  trainer_id: string;
+}

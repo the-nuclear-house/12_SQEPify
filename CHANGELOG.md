@@ -6,6 +6,26 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Training catalogue
+
+**What and why.** Build-order step: the Training Catalogue, the second tab on the Trainings
+page. Adds `trainings` (one competency, a from-star to to-star band, duration in days,
+optional notes) and `training_deliverers` (links to the approved trainers registry). A
+training can span several bands (e.g. 1 to 3). Each training shows a star-to-star visual of
+what it delivers. Staff read and write.
+
+**SQL (safe to re-run):** see the trainings section of `supabase/baseline/SCHEMA_BASELINE.sql`
+or the block provided in chat.
+
+**Undo:**
+
+```sql
+drop table if exists public.training_deliverers;
+drop table if exists public.trainings;
+```
+
+---
+
 ## Roles and the Base Nuclear role
 
 **What and why.** Build-order step: competencies are now split into Library (definitions)

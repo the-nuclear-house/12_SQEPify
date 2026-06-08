@@ -372,3 +372,39 @@ create policy rc_write on public.role_competencies for all using (public.is_staf
 insert into public.roles (name, is_base, sort_order)
 select 'Base Nuclear', true, 0
 where not exists (select 1 from public.roles where is_base);
+
+-- ============================================================
+-- Training catalogue: a training addresses one competency and moves a learner from
+-- a lower star to a higher one. Deliverers come from the approved trainers registry.
+-- Read/write: staff.
+-- ============================================================
+create table if not exists public.trainings (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  from_level int not null check (from_level between 1 and 4),
+  to_level int not null check (to_level between 2 and 5),
+  duration_days numeric,
+  notes text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  check (from_level < to_level)
+);
+create index if not exists trainings_competency on public.trainings(competency_id);
+
+create table if not exists public.training_deliverers (
+  training_id uuid not null references public.trainings(id) on delete cascade,
+  trainer_id uuid not null references public.trainers(id) on delete cascade,
+  primary key (training_id, trainer_id)
+);
+
+alter table public.trainings enable row level security;
+alter table public.training_deliverers enable row level security;
+drop policy if exists trainings_read on public.trainings;
+create policy trainings_read on public.trainings for select using (public.is_staff());
+drop policy if exists trainings_write on public.trainings;
+create policy trainings_write on public.trainings for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists td_read on public.training_deliverers;
+create policy td_read on public.training_deliverers for select using (public.is_staff());
+drop policy if exists td_write on public.training_deliverers;
+create policy td_write on public.training_deliverers for all using (public.is_staff()) with check (public.is_staff());

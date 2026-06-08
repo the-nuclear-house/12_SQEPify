@@ -1174,3 +1174,54 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .role-cat-card { break-inside: avoid; margin: 0 0 16px; width: auto; display: block; }
 @media (max-width: 1300px) { .role-cat-grid { column-count: 2; } }
 @media (max-width: 760px) { .role-cat-grid { column-count: 1; } }
+
+/* Star band visual */
+.starband { display: inline-flex; align-items: center; gap: 10px; }
+.stars { display: inline-flex; gap: 1px; font-size: 16px; line-height: 1; letter-spacing: 1px; }
+.stars .star.off { color: var(--star-off); }
+.stars.have .star.on { color: var(--steel); }
+.stars.gain .star.on { color: var(--brand-green); }
+.band-arrow { color: var(--text-faint); font-size: 14px; }
+
+/* Training catalogue */
+.training-list { display: flex; flex-direction: column; gap: 14px; }
+.training-card {
+  display: flex; gap: 20px; align-items: stretch; justify-content: space-between;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 4px solid var(--brand-green); border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.training-main { flex: 1; min-width: 0; }
+.training-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.training-comp { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+.training-breadcrumb {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--brand-cyan); margin-right: 8px;
+}
+.training-deliverers { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.mini-chip {
+  font-size: 11px; color: var(--text-muted); background: var(--surface-3);
+  border: 1px solid var(--border); padding: 3px 9px; border-radius: 999px;
+}
+.training-notes { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.training-side {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  flex-shrink: 0; text-align: right; border-left: 1px solid var(--border); padding-left: 20px;
+}
+.training-duration { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+
+/* Training modal band picker */
+.band-edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 12px; }
+.band-pick { display: flex; flex-direction: column; gap: 4px; }
+.band-pick span { font-size: 11px; color: var(--text-faint); }
+.band-pick .field { margin-bottom: 0; }
+.band-preview { padding: 8px 0; }
+.deliverer-box {
+  max-height: 180px; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px; margin-bottom: 12px;
+}
+
+@media (max-width: 680px) {
+  .training-card { flex-direction: column; }
+  .training-side { align-items: flex-start; text-align: left; border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 12px; }
+}

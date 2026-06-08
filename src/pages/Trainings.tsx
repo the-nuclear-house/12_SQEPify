@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ApprovedTrainers from '../components/ApprovedTrainers';
+import TrainingCatalogue from '../components/TrainingCatalogue';
 
 type Tab = 'trainers' | 'catalogue';
 
@@ -28,14 +29,7 @@ export default function Trainings() {
       {tab === 'trainers' ? (
         <ApprovedTrainers />
       ) : (
-        <div className="card">
-          <p className="muted">
-            The training catalogue is the next step. Each training will carry its title,
-            the competency it addresses, the star band it moves someone through, a
-            duration, and its approved deliverers chosen from the trainers tab.
-          </p>
-          <span className="stub-note">next: Training Catalogue</span>
-        </div>
+        <TrainingCatalogue />
       )}
     </div>
   );

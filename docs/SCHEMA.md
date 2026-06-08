@@ -10,6 +10,18 @@ arrives in later build-order steps and is added here as it is built.
 
 ---
 
+## trainings, training_deliverers
+
+A training addresses exactly one competency and records the star band it moves a learner
+through (from a lower star to a higher one, 1 to 5). It has a duration in days, optional
+notes, and one or more deliverers drawn from the approved trainers registry
+(`training_deliverers`). The band is what lets the assessment later match a person's gap
+to the right training.
+
+**Who can read / write:** staff (superadmins and Technical Directors).
+
+---
+
 ## roles, role_competencies
 
 Roles are named sets of competencies. **Base Nuclear** is a special role that is always
