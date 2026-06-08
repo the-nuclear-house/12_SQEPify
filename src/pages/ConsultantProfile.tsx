@@ -75,28 +75,40 @@ function Figure({ progress, full }: { progress: number; full: boolean }) {
 }
 
 // ---------------- Radar ----------------
-function Radar({ comps }: { comps: CompetencyScore[] }) {
+function Radar({ comps, onAxisClick }: { comps: CompetencyScore[]; onAxisClick?: (label: string) => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id); }, []);
-  const cx = 160, cy = 160, R = 110, N = comps.length;
+  const cx = 240, cy = 178, R = 118, N = comps.length;
   const pt = (i: number, level: number) => {
     const ang = (-90 + (i * 360) / N) * (Math.PI / 180);
     const r = (level / 5) * R;
     return [cx + r * Math.cos(ang), cy + r * Math.sin(ang)] as const;
   };
+  const labelPt = (i: number) => {
+    const ang = (-90 + (i * 360) / N) * (Math.PI / 180);
+    const r = R + 22;
+    return [cx + r * Math.cos(ang), cy + r * Math.sin(ang)] as const;
+  };
   const polyOf = (levels: number[]) => levels.map((l, i) => pt(i, l).join(',')).join(' ');
+  const trunc = (s: string) => (s.length > 16 ? s.slice(0, 15) + '…' : s);
   return (
-    <svg viewBox="0 0 320 320" className="radar-svg" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 480 356" className="radar-svg" xmlns="http://www.w3.org/2000/svg">
       {[1, 2, 3, 4, 5].map((lv) => (<polygon key={lv} points={polyOf(Array(N).fill(lv))} fill="none" stroke="#2c3845" strokeWidth="1" />))}
       {comps.map((_, i) => { const [x, y] = pt(i, 5); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#2c3845" strokeWidth="1" />; })}
       <polygon points={polyOf(comps.map((c) => c.target))} fill="none" stroke="#d7b23e" strokeWidth="1.5" strokeDasharray="5 4" />
-      <g style={{ transformOrigin: '160px 160px', transform: mounted ? 'scale(1)' : 'scale(0)', transition: 'transform .9s cubic-bezier(.22,.61,.36,1)' }}>
+      <g style={{ transformOrigin: `${cx}px ${cy}px`, transform: mounted ? 'scale(1)' : 'scale(0)', transition: 'transform .55s cubic-bezier(.22,.61,.36,1)' }}>
         <polygon points={polyOf(comps.map((c) => c.current))} fill="#00aeef" fillOpacity="0.22" stroke="#00aeef" strokeWidth="2.5" />
         {comps.map((c, i) => { const [x, y] = pt(i, c.current); return <circle key={i} cx={x} cy={y} r="3.5" fill="#00aeef" />; })}
       </g>
       {comps.map((c, i) => {
-        const [x, y] = pt(i, 5.7);
-        return (<text key={i} x={x} y={y} className="radar-label" textAnchor={x < cx - 5 ? 'end' : x > cx + 5 ? 'start' : 'middle'} dominantBaseline="middle">{c.competency}</text>);
+        const [x, y] = labelPt(i);
+        const anchor = x < cx - 6 ? 'end' : x > cx + 6 ? 'start' : 'middle';
+        return (
+          <text key={i} x={x} y={y} className={`radar-label${onAxisClick ? ' clickable' : ''}`} textAnchor={anchor} dominantBaseline="middle"
+            onClick={onAxisClick ? () => onAxisClick(c.competency) : undefined}>
+            <title>{c.competency}</title>{trunc(c.competency)}
+          </text>
+        );
       })}
     </svg>
   );
@@ -150,6 +162,7 @@ export default function ConsultantProfile() {
   const [roleOpen, setRoleOpen] = useState(false);
   const roleInputRef = useRef<HTMLInputElement>(null);
   const [selfScores, setSelfScores] = useState<Record<string, number>>({});
+  const [drillCat, setDrillCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +256,14 @@ export default function ConsultantProfile() {
     });
     return [...byCat.entries()].map(([competency, e]) => ({ competency, current: e.cur / e.n, target: e.tgt / e.n }));
   }, [liveComps]);
+
+  // Competencies within a drilled-into category.
+  const drillData: CompetencyScore[] = useMemo(
+    () => (drillCat ? liveComps.filter((c) => c.category === drillCat).map((c) => ({ competency: c.name, current: c.current, target: c.required })) : []),
+    [drillCat, liveComps],
+  );
+  const atRequired = useMemo(() => liveComps.filter((c) => c.required > 0 && c.current >= c.required).length, [liveComps]);
+  const rolesLabel = useMemo(() => ['Base Nuclear', ...selected.map(roleName)].filter(Boolean).join(', '), [selected, roles]);
 
   const progress = useMemo(() => {
     const need = liveComps.reduce((s, c) => s + c.required, 0);
@@ -388,7 +409,12 @@ export default function ConsultantProfile() {
           <Figure progress={progress} full={full} />
           <div className="fig-readout">
             <div className="big-pct">{pct}%</div>
-            <div className="fig-caption">{full ? 'Fully nuclearised' : assessment ? 'Nuclearisation' : 'Not started'}</div>
+            <div className="fig-caption">SQEPimeter</div>
+            {hasScores ? (
+              <div className={`fig-sub${full ? ' gold' : ''}`}>{full ? 'Fully SQEP for this role' : `${atRequired}/${liveComps.length} competencies at the required level`}</div>
+            ) : (
+              <div className="fig-sub">Not started</div>
+            )}
           </div>
         </div>
 
@@ -428,10 +454,18 @@ export default function ConsultantProfile() {
 
       <div className="profile-lower">
         <div className="card radar-card">
-          <h2>Competency map</h2>
+          <div className="radar-head">
+            <h2>Competency map{drillCat && <> · <span className="radar-cat">{drillCat}</span></>}</h2>
+            {drillCat && <button className="link-btn" onClick={() => setDrillCat(null)}>← All categories</button>}
+          </div>
+          {hasScores && <p className="muted radar-roles">Assessed against {rolesLabel}.{!drillCat && ' Click a category to see its competencies.'}</p>}
           {hasScores ? (
             <>
-              <Radar comps={radarData} />
+              <Radar
+                key={drillCat ?? 'all'}
+                comps={drillCat ? drillData : radarData}
+                onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
+              />
               <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
             </>
           ) : (

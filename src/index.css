@@ -1629,3 +1629,14 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .stage-pill.st-validate { color: var(--brand-gold); background: rgba(215,178,62,0.16); }
 .stage-pill.st-plan { color: var(--danger); background: rgba(207,90,10,0.16); }
 .stage-pill.st-done { color: var(--brand-green); background: rgba(132,195,65,0.16); }
+
+/* Competency map: heading, role caption, drillable labels, SQEPimeter sub */
+.radar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.radar-head h2 { margin: 0; }
+.radar-cat { color: var(--brand-cyan); }
+.radar-roles { margin: 4px 0 6px; font-size: 12px; }
+.radar-label { fill: var(--text-muted); font-size: 11px; }
+.radar-label.clickable { cursor: pointer; }
+.radar-label.clickable:hover { fill: var(--brand-cyan); text-decoration: underline; }
+.fig-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; max-width: 150px; }
+.fig-sub.gold { color: var(--brand-gold); font-weight: 600; }
