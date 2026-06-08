@@ -165,7 +165,6 @@ export default function CompetencyRoles() {
           <header className="comp-cat-head">
             <h2>{selectedRole.is_base && <span className="base-tag">BASE</span>}{selectedRole.name}</h2>
             <div className="tree-actions">
-              <button className="btn btn-sm btn-primary" onClick={() => setBrowseOpen(true)}>+ Add competencies</button>
               {!selectedRole.is_base && (
                 <>
                   <button className="link-btn" onClick={() => { setRoleName(selectedRole.name); setRoleModal({ mode: 'edit', role: selectedRole }); }}>Rename</button>
@@ -178,28 +177,31 @@ export default function CompetencyRoles() {
             {selectedRole.is_base && (
               <p className="muted role-note">Everyone is assessed against this role, plus any roles you select for them.</p>
             )}
-            {selectedComps.length === 0 ? (
-              <p className="muted">No competencies yet. Use “Add competencies”.</p>
-            ) : (
-              Object.entries(selectedGrouped).map(([catId, bySub]) => (
-                <div className="role-grp" key={catId}>
-                  <div className="role-grp-cat">{catsById[catId]?.name ?? 'Category'}</div>
-                  {Object.entries(bySub).map(([subId, items]) => (
-                    <div className="role-grp-sub-block" key={subId}>
-                      {subId !== 'none' && <div className="role-grp-sub">{subsById[subId]?.name ?? ''}</div>}
-                      <div className="comp-grid">
-                        {items.map((c) => (
-                          <div className="comp-card role-comp" key={c.id}>
-                            <span className="c-name">{c.name}</span>
-                            <button className="link-btn danger role-remove" onClick={() => toggleComp(c)}>Remove</button>
-                          </div>
-                        ))}
-                      </div>
+            {selectedComps.length > 0 && Object.entries(selectedGrouped).map(([catId, bySub]) => (
+              <div className="role-grp" key={catId}>
+                <div className="role-grp-cat">{catsById[catId]?.name ?? 'Category'}</div>
+                {Object.entries(bySub).map(([subId, items]) => (
+                  <div className="role-grp-sub-block" key={subId}>
+                    {subId !== 'none' && <div className="role-grp-sub">{subsById[subId]?.name ?? ''}</div>}
+                    <div className="comp-grid">
+                      {items.map((c) => (
+                        <div className="comp-card role-comp" key={c.id}>
+                          <span className="c-name">{c.name}</span>
+                          <button className="link-btn danger role-remove" onClick={() => toggleComp(c)}>Remove</button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ))
-            )}
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            <div className="comp-grid add-row-grid">
+              <button className="comp-card comp-add" onClick={() => setBrowseOpen(true)}>
+                <span className="plus">+</span>
+                <span>Add competencies</span>
+              </button>
+            </div>
           </div>
         </section>
       ) : (
