@@ -173,3 +173,12 @@ delivered (or cancelled), and an 18-month `horizon_months`. `assessment_roles` r
 role-based roles chosen for it; Base Nuclear always applies and is not stored. Staff
 (`is_staff()`) manage assessments; a consultant can read their own (matched via
 `users.consultant_id`). Scores and the generated plan are added in later steps.
+
+## app_settings (key/value)
+
+A simple key/value table read by the AI edge functions and editable by the superadmin. The AI
+client reads three keys in one request: `ai_primary_provider` (anthropic|openai),
+`ai_model_anthropic` and `ai_model_openai`. When a provider deprecates a model, the superadmin
+updates the string here, no code change. Selectable by any authenticated user; written by
+superadmin only. The provider API keys themselves are never here; they live as edge-function
+secrets (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).

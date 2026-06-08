@@ -1,3 +1,25 @@
+## AI backend foundation (settings, secrets, first edge function)
+
+**What and why.** Set up the server-side AI plumbing, mirroring the Control Room: a key/value
+`app_settings` table the canonical AI client reads (primary provider plus the two model
+strings), and the first edge function, `parse-cv-nuclear`, which reads a consultant CV against
+the competency library and returns the levels it evidences. The function embeds the canonical
+client verbatim and is gated to technical_director and superadmin. Also corrected the two
+consultant self-read policies from the previous step to match on email (the app's identity),
+not auth.uid().
+
+**SQL (safe to re-run):** reshapes `app_settings` to key/value and seeds the three AI keys,
+and re-creates the corrected assessment self-read policies. See the block in chat.
+
+**Supabase setup (not SQL):** add function secrets `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
+(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically), and create an edge
+function named `parse-cv-nuclear` from the file in `supabase/functions/`.
+
+**Undo:** revert `app_settings` to its previous single-row shape if needed; the edge function
+can simply be deleted in the dashboard.
+
+---
+
 ## Consultant assessment workflow, step 1 (set-up)
 
 **What and why.** The consultant page is now the start of the assessment workflow. Opening a

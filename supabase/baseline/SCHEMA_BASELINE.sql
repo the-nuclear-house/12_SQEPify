@@ -29,18 +29,19 @@ create unique index if not exists users_email_lower_idx
   on public.users (lower(email));
 
 -- ============================================================
--- app_settings (single row: AI provider and model)
+-- app_settings (key/value; read by the AI client and editable by the superadmin)
 -- ============================================================
 create table if not exists public.app_settings (
-  id          boolean primary key default true check (id),  -- enforces a single row
-  ai_provider text not null default 'anthropic'
-              check (ai_provider in ('anthropic', 'openai')),
-  ai_model    text not null default 'claude-sonnet-4-20250514',
-  updated_at  timestamptz not null default now()
+  key        text primary key,
+  value      text,
+  updated_at timestamptz not null default now()
 );
 
-insert into public.app_settings (id) values (true)
-on conflict (id) do nothing;
+insert into public.app_settings (key, value) values
+  ('ai_primary_provider', 'anthropic'),
+  ('ai_model_anthropic',  'claude-sonnet-4-6'),
+  ('ai_model_openai',     'gpt-4o')
+on conflict (key) do nothing;
 
 -- ============================================================
 -- Helper: is the caller a superadmin?
@@ -473,7 +474,7 @@ drop policy if exists assessments_staff_all on public.assessments;
 create policy assessments_staff_all on public.assessments for all using (public.is_staff()) with check (public.is_staff());
 drop policy if exists assessments_own_read on public.assessments;
 create policy assessments_own_read on public.assessments for select using (
-  consultant_id::text = (select u.consultant_id from public.users u where u.id = auth.uid())
+  consultant_id::text = (select u.consultant_id from public.users u where lower(u.email) = lower(auth.jwt() ->> 'email'))
 );
 
 drop policy if exists ar_staff_all on public.assessment_roles;
@@ -483,6 +484,6 @@ create policy ar_own_read on public.assessment_roles for select using (
   exists (
     select 1 from public.assessments a
     join public.users u on u.consultant_id = a.consultant_id::text
-    where a.id = assessment_id and u.id = auth.uid()
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email')
   )
 );
