@@ -501,3 +501,28 @@ create policy as_own_rw on public.assessment_scores for all using (
     where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email')
   )
 );
+create table if not exists public.plan_items (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references public.assessments(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  training_id uuid references public.trainings(id) on delete set null,
+  title text,
+  from_level int not null default 0,
+  to_level int not null default 0,
+  start_month int not null default 0,
+  duration_months int not null default 1,
+  status text not null default 'planned' check (status in ('planned','training_done','confirmed','blocked')),
+  outcome_level int check (outcome_level between 0 and 5),
+  note text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists plan_items_assessment on public.plan_items(assessment_id);
+alter table public.plan_items enable row level security;
+drop policy if exists pi_staff_all on public.plan_items;
+create policy pi_staff_all on public.plan_items for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists pi_own_read on public.plan_items;
+create policy pi_own_read on public.plan_items for select using (
+  exists (select 1 from public.assessments a join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+);

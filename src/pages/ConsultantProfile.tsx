@@ -8,6 +8,7 @@ import FileDropzone from '../components/FileDropzone';
 import type {
   Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
   Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
+  CompetencyLevelTraining, PlanItem, Training,
   CompetencyScore, PlannedTraining,
 } from '../lib/types';
 
@@ -155,6 +156,11 @@ export default function ConsultantProfile() {
   const [cats, setCats] = useState<CompetencyCategory[]>([]);
   const [subs, setSubs] = useState<CompetencySubcategory[]>([]);
   const [scores, setScores] = useState<AssessmentScore[]>([]);
+  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [clts, setClts] = useState<CompetencyLevelTraining[]>([]);
+  const [trainings, setTrainingsList] = useState<Training[]>([]);
+  const [planning, setPlanning] = useState(false);
+  const [reassess, setReassess] = useState<Record<string, number>>({});
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
@@ -169,12 +175,10 @@ export default function ConsultantProfile() {
   const [error, setError] = useState<string | null>(null);
   const [modalStep, setModalStep] = useState<number | null>(null);
 
-  const trainings: PlannedTraining[] = [];
-
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [c, r, a, k, rc, cat, sub] = await Promise.all([
+    const [c, r, a, k, rc, cat, sub, clt, tns] = await Promise.all([
       supabase.from('consultants').select('*').eq('id', id).maybeSingle(),
       supabase.from('roles').select('*').order('is_base', { ascending: false }).order('sort_order').order('name'),
       supabase.from('assessments').select('*').eq('consultant_id', id).neq('status', 'cancelled')
@@ -183,8 +187,10 @@ export default function ConsultantProfile() {
       supabase.from('role_competencies').select('*'),
       supabase.from('competency_categories').select('*'),
       supabase.from('competency_subcategories').select('*'),
+      supabase.from('competency_level_trainings').select('*'),
+      supabase.from('trainings').select('*'),
     ]);
-    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error;
+    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error || clt.error || tns.error;
     if (err) { setError(err.message); setLoading(false); return; }
     setError(null);
     setConsultant((c.data as Consultant) ?? null);
@@ -193,16 +199,20 @@ export default function ConsultantProfile() {
     setRoleComps((rc.data as RoleCompetency[]) ?? []);
     setCats((cat.data as CompetencyCategory[]) ?? []);
     setSubs((sub.data as CompetencySubcategory[]) ?? []);
+    setClts((clt.data as CompetencyLevelTraining[]) ?? []);
+    setTrainingsList((tns.data as Training[]) ?? []);
     const asmt = (a.data as Assessment) ?? null;
     setAssessment(asmt);
     if (asmt) {
-      const [{ data: ar }, { data: sc }] = await Promise.all([
+      const [{ data: ar }, { data: sc }, { data: pi }] = await Promise.all([
         supabase.from('assessment_roles').select('*').eq('assessment_id', asmt.id),
         supabase.from('assessment_scores').select('*').eq('assessment_id', asmt.id),
+        supabase.from('plan_items').select('*').eq('assessment_id', asmt.id).order('sort_order'),
       ]);
       setSelected(((ar as AssessmentRole[]) ?? []).map((x) => x.role_id));
       setScores((sc as AssessmentScore[]) ?? []);
-    } else { setSelected([]); setScores([]); }
+      setPlanItems((pi as PlanItem[]) ?? []);
+    } else { setSelected([]); setScores([]); setPlanItems([]); }
     setLoading(false);
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -265,6 +275,27 @@ export default function ConsultantProfile() {
   );
   const atRequired = useMemo(() => liveComps.filter((c) => c.required > 0 && c.current >= c.required).length, [liveComps]);
   const rolesLabel = useMemo(() => ['Base Nuclear', ...selected.map(roleName)].filter(Boolean).join(', '), [selected, roles]);
+
+  const trainingById = useMemo(() => Object.fromEntries(trainings.map((t) => [t.id, t])), [trainings]);
+  const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
+  const planForGantt: PlannedTraining[] = useMemo(() => planItems.map((p) => ({
+    id: p.id,
+    name: (p.training_id ? trainingById[p.training_id]?.title : null) ?? p.title ?? 'Training',
+    competency: compName(p.competency_id),
+    fromLevel: p.from_level,
+    toLevel: p.to_level,
+    startMonth: p.start_month,
+    durationMonths: p.duration_months,
+    status: p.status === 'confirmed' ? 'done' : p.status === 'training_done' ? 'in_progress' : 'upcoming',
+  })), [planItems, trainingById, comps]);
+
+  // Plan items grouped by competency, for the loop UI.
+  const planGroups = useMemo(() => {
+    const m = new Map<string, PlanItem[]>();
+    planItems.forEach((p) => { const a = m.get(p.competency_id) ?? []; a.push(p); m.set(p.competency_id, a); });
+    return [...m.entries()].map(([cid, items]) => ({ cid, name: compName(cid), items }));
+  }, [planItems, comps]);
+  const allConfirmed = planItems.length > 0 && planItems.every((p) => p.status === 'confirmed');
 
   const progress = useMemo(() => {
     if (liveComps.length === 0) return 0;
@@ -336,6 +367,57 @@ export default function ConsultantProfile() {
     const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
     if (upErr) { setError(upErr.message); setSaving(false); return; }
     const { error } = await supabase.from('assessments').update({ status: 'planning' }).eq('id', assessment.id);
+    if (error) setError(error.message);
+    setSaving(false); setModalStep(null); load();
+  }
+
+  async function generatePlan() {
+    if (!assessment) return;
+    setPlanning(true); setError(null);
+    const rows: Array<Record<string, unknown>> = [];
+    let order = 0;
+    applicable.forEach((c) => {
+      const sc = scoreByComp[c.id];
+      const cur = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0;
+      let cursor = 0;
+      for (let L = Math.max(cur + 1, 2); L <= c.required; L++) {
+        const trs = clts.filter((x) => x.competency_id === c.id && x.level === L);
+        const push = (training_id: string | null, title: string | null, dm: number) => {
+          rows.push({ assessment_id: assessment.id, competency_id: c.id, training_id, title, from_level: L - 1, to_level: L, start_month: cursor, duration_months: dm, status: 'planned', sort_order: order++ });
+          cursor += dm + 1;
+        };
+        if (trs.length === 0) push(null, `Training needed to reach level ${L}`, 1);
+        else trs.forEach((t) => {
+          const tr = trainingById[t.training_id];
+          const dm = Math.max(1, Math.min(4, Math.round((tr?.duration_hours || 40) / 40)));
+          push(t.training_id, tr?.title ?? 'Training', dm);
+        });
+      }
+    });
+    await supabase.from('plan_items').delete().eq('assessment_id', assessment.id);
+    if (rows.length) { const { error } = await supabase.from('plan_items').insert(rows); if (error) setError(error.message); }
+    await supabase.from('assessments').update({ status: 'plan_review' }).eq('id', assessment.id);
+    setPlanning(false); await load();
+  }
+
+  async function markDelivered(item: PlanItem) {
+    const { error } = await supabase.from('plan_items').update({ status: 'training_done' }).eq('id', item.id);
+    if (error) setError(error.message);
+    load();
+  }
+
+  async function confirmMove(item: PlanItem, level: number) {
+    if (!assessment) return;
+    const e1 = (await supabase.from('assessment_scores').upsert([{ assessment_id: assessment.id, competency_id: item.competency_id, validated_level: level }], { onConflict: 'assessment_id,competency_id' })).error;
+    const e2 = (await supabase.from('plan_items').update({ status: 'confirmed', outcome_level: level }).eq('id', item.id)).error;
+    if (e1 || e2) setError((e1 || e2)!.message);
+    load();
+  }
+
+  async function markNuclearised() {
+    if (!assessment) return;
+    setSaving(true);
+    const { error } = await supabase.from('assessments').update({ status: 'delivered' }).eq('id', assessment.id);
     if (error) setError(error.message);
     setSaving(false); setModalStep(null); load();
   }
@@ -496,8 +578,8 @@ export default function ConsultantProfile() {
         </div>
         <div className="card gantt-card">
           <h2>Training plan</h2>
-          {trainings.length ? <Gantt trainings={trainings} /> : (
-            <EmptyViz title="No plan yet" hint="The 18-month plan appears once the assessment is nuclearised." />
+          {planForGantt.length ? <Gantt trainings={planForGantt} /> : (
+            <EmptyViz title="No plan yet" hint="The plan is generated at the Plan step once levels are validated." />
           )}
         </div>
       </div>
@@ -714,11 +796,77 @@ export default function ConsultantProfile() {
         </div>
       )}
 
-      {modalStep !== null && modalStep > 2 && (
+      {/* Plan + delivery loop */}
+      {modalStep === 3 && (
+        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Plan</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
+            <div className="modal-step">
+              {!isStaff ? (
+                <p className="muted">Your Technical Director builds and runs your training plan. You'll see it fill in on your profile as trainings are completed and confirmed.</p>
+              ) : !assessment ? (
+                <p className="muted">Earlier steps have to be completed first.</p>
+              ) : planItems.length === 0 ? (
+                <>
+                  <p className="muted">Build the training plan from the gap between each validated level and the role's required level, using the trainings on each competency's learning path. You can then run the loop below as trainings happen.</p>
+                  <button className="btn btn-primary btn-block" onClick={generatePlan} disabled={planning}>
+                    {planning ? 'Building the plan…' : 'Generate the plan'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="muted">A training is an enabler, not a tick-box. Mark it delivered, then re-assess and confirm the level the consultant actually reached. The confirmed level is what moves the stars and fills the SQEPimeter.</p>
+                  <div className="plan-list">
+                    {planGroups.map((g) => (
+                      <div className="plan-group" key={g.cid}>
+                        <div className="sa-cat">{g.name}</div>
+                        {g.items.map((it) => {
+                          const label = (it.training_id ? trainingById[it.training_id]?.title : null) ?? it.title ?? 'Training';
+                          return (
+                            <div className={`plan-item ${it.status}`} key={it.id}>
+                              <div className="plan-item-main">
+                                <div className="plan-item-name">{label}</div>
+                                <div className="plan-item-meta">level {it.from_level} → {it.to_level}</div>
+                              </div>
+                              {it.status === 'planned' && (
+                                <button className="btn btn-sm" onClick={() => markDelivered(it)}>Mark delivered</button>
+                              )}
+                              {it.status === 'training_done' && (
+                                <div className="plan-reassess">
+                                  <span className="muted">Confirm level reached:</span>
+                                  <StarRating value={reassess[it.id] ?? it.to_level} onChange={(v) => setReassess((s) => ({ ...s, [it.id]: v }))} showLabel={false} size="sm" />
+                                  <button className="btn btn-sm btn-primary" onClick={() => confirmMove(it, reassess[it.id] ?? it.to_level)}>Confirm</button>
+                                </div>
+                              )}
+                              {it.status === 'confirmed' && (
+                                <span className="plan-confirmed">✓ confirmed at level {it.outcome_level}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="plan-foot">
+                    <button className="link-btn" onClick={generatePlan} disabled={planning}>{planning ? 'Rebuilding…' : 'Regenerate plan'}</button>
+                    {allConfirmed && (
+                      <button className="btn btn-primary" onClick={markNuclearised} disabled={saving}>
+                        {saving ? 'Finishing…' : 'Mark fully nuclearised'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalStep !== null && modalStep > 3 && (
         <div className="modal-overlay" onClick={() => setModalStep(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>{STEPS[modalStep]}</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
-            <div className="modal-step"><p className="muted">This step is being built next.</p></div>
+            <div className="modal-step"><p className="muted">{assessment?.status === 'delivered' ? 'This consultant is fully nuclearised for their role.' : 'Reached once the plan is complete and every level is confirmed.'}</p></div>
           </div>
         </div>
       )}

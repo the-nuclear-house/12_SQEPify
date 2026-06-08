@@ -146,6 +146,23 @@ export interface CompetencyLevelTraining {
   training_id: string;
 }
 
+export interface PlanItem {
+  id: string;
+  assessment_id: string;
+  competency_id: string;
+  training_id: string | null;
+  title: string | null;
+  from_level: number;
+  to_level: number;
+  start_month: number;
+  duration_months: number;
+  status: 'planned' | 'training_done' | 'confirmed' | 'blocked';
+  outcome_level: number | null;
+  note: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export type AssessmentStatus =
   | 'draft'
   | 'self_assessment'

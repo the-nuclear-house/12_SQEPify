@@ -1,3 +1,46 @@
+## Training plan + delivery loop (plan_items)
+
+**What and why.** The Plan step builds a training plan from the gap between each validated level
+and the role's required level, using the trainings on each competency's learning path. Crucially, a
+training does not auto-advance a level. Each plan item runs planned → training_done → confirmed: the
+TD marks the training delivered, then re-assesses and confirms the level the consultant actually
+reached. That confirmed level is written back to assessment_scores.validated_level, which is what
+moves the stars and fills the SQEPimeter. If a training didn't close the gap, the level simply isn't
+confirmed up and more help can be planned.
+
+**SQL (safe to re-run).**
+```sql
+create table if not exists public.plan_items (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references public.assessments(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  training_id uuid references public.trainings(id) on delete set null,
+  title text,
+  from_level int not null default 0,
+  to_level int not null default 0,
+  start_month int not null default 0,
+  duration_months int not null default 1,
+  status text not null default 'planned' check (status in ('planned','training_done','confirmed','blocked')),
+  outcome_level int check (outcome_level between 0 and 5),
+  note text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists plan_items_assessment on public.plan_items(assessment_id);
+alter table public.plan_items enable row level security;
+drop policy if exists pi_staff_all on public.plan_items;
+create policy pi_staff_all on public.plan_items for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists pi_own_read on public.plan_items;
+create policy pi_own_read on public.plan_items for select using (
+  exists (select 1 from public.assessments a join public.users u on u.consultant_id = a.consultant_id::text
+    where a.id = assessment_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+);
+```
+
+**Undo.** `drop table if exists public.plan_items;`
+
+Note: plan generation is deterministic from the learning paths for now; the AI `sqepify-plan`
+function can refine spacing/sequencing later without schema change.
 ## Consultant self-service reads (widen taxonomy/roles to signed-in users)
 
 **What and why.** Consultants now have their own locked-down view (their profile only) and

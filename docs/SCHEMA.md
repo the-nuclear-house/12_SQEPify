@@ -184,3 +184,10 @@ secrets (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
 One row per (assessment, competency). `ai_level` = AI's CV-derived proposal, `self_level` =
 consultant's self-assessment, `validated_level` = TD's locked level, `note` = evidence/comment.
 All levels 0–5 (0 = not assessed). RLS: staff read/write all; consultant read/write own by email.
+
+## plan_items
+The training plan, one row per planned training/level-step for an assessment. `from_level`→`to_level`
+is the intended jump, `start_month`/`duration_months` place it on the Gantt. `status` runs
+planned → training_done → confirmed (a training is an enabler; the TD's confirmed re-assessment is
+what advances the level). `outcome_level` is the level the TD confirmed after the training; confirming
+writes that into assessment_scores.validated_level. RLS: staff read/write all; consultant read own.
