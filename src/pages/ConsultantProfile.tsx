@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
@@ -152,6 +152,8 @@ export default function ConsultantProfile() {
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
   const [roleQuery, setRoleQuery] = useState('');
+  const [roleOpen, setRoleOpen] = useState(false);
+  const roleInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -411,37 +413,44 @@ export default function ConsultantProfile() {
             <div className="modal-step">
               {setupWiz === 0 && (
                 <>
-                  <p className="muted">Which roles is this consultant assessed against? Base Nuclear always applies; add any role-based competencies on top.</p>
-
-                  <div className="role-chips">
-                    {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
-                    {selected.map((rid) => (
-                      <span className="role-chip" key={rid}>{roleName(rid)}
-                        <button className="role-chip-x" onClick={() => toggle(rid)} aria-label={`Remove ${roleName(rid)}`}>×</button>
-                      </span>
-                    ))}
-                    {selected.length === 0 && <span className="muted role-chip-hint">No extra roles yet</span>}
-                  </div>
+                  <p className="muted">Which roles is this consultant assessed against? Base Nuclear always applies; type to add any role-based competencies on top.</p>
 
                   {otherRoles.length === 0 ? (
-                    <p className="muted">No role-based roles defined yet.</p>
+                    <div className="ms"><div className="ms-control static">
+                      {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
+                      <span className="muted role-chip-hint">No role-based roles defined yet</span>
+                    </div></div>
                   ) : (
-                    <>
-                      <input className="field role-search" placeholder={`Search ${otherRoles.length} roles…`} value={roleQuery} onChange={(e) => setRoleQuery(e.target.value)} />
-                      <div className="role-list">
-                        {otherRoles
-                          .filter((r) => r.name.toLowerCase().includes(roleQuery.trim().toLowerCase()))
-                          .map((r) => (
-                            <label className={`role-pick-row${selected.includes(r.id) ? ' on' : ''}`} key={r.id}>
-                              <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
-                              <span className="role-pick-name">{r.name}</span>
-                            </label>
-                          ))}
-                        {otherRoles.filter((r) => r.name.toLowerCase().includes(roleQuery.trim().toLowerCase())).length === 0 && (
-                          <p className="muted role-list-empty">No roles match “{roleQuery}”.</p>
-                        )}
+                    <div className="ms">
+                      <div className="ms-control" onClick={() => { roleInputRef.current?.focus(); setRoleOpen(true); }}>
+                        {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
+                        {selected.map((rid) => (
+                          <span className="role-chip" key={rid}>{roleName(rid)}
+                            <button className="role-chip-x" onMouseDown={(e) => e.preventDefault()} onClick={() => toggle(rid)} aria-label={`Remove ${roleName(rid)}`}>×</button>
+                          </span>
+                        ))}
+                        <input ref={roleInputRef} className="ms-input" value={roleQuery}
+                          placeholder={selected.length ? 'Add another…' : 'Add roles…'}
+                          onChange={(e) => { setRoleQuery(e.target.value); setRoleOpen(true); }}
+                          onFocus={() => setRoleOpen(true)}
+                          onBlur={() => setTimeout(() => setRoleOpen(false), 120)} />
                       </div>
-                    </>
+                      {roleOpen && (() => {
+                        const matches = otherRoles.filter((r) => !selected.includes(r.id) && r.name.toLowerCase().includes(roleQuery.trim().toLowerCase()));
+                        return (
+                          <div className="ms-menu">
+                            {matches.length === 0 ? (
+                              <div className="ms-empty">{roleQuery ? `No roles match “${roleQuery}”` : 'All roles added'}</div>
+                            ) : matches.map((r) => (
+                              <button className="ms-opt" key={r.id} onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => { toggle(r.id); setRoleQuery(''); roleInputRef.current?.focus(); }}>
+                                {r.name}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   )}
 
                   <div className="wiz-foot">
