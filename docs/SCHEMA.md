@@ -19,9 +19,9 @@ training in the catalogue may only list deliverers that appear here.
 
 **Who can read:** superadmins and Technical Directors (staff).
 
-**Who can write:** superadmins only, for now. Opening this to Technical Directors needs
-a small change to let them read the user and consultant lists used to pick trainers,
-which we can make when wanted.
+**Who can write:** superadmins and Technical Directors. Trainers are picked through a
+guarded lookup (`trainer_candidates`) so this does not open up the user or consultant
+tables.
 
 ---
 

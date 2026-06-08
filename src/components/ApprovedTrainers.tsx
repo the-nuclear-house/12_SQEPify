@@ -16,7 +16,8 @@ const KIND_LABEL: Record<Trainer['kind'], string> = {
 
 export default function ApprovedTrainers() {
   const { user } = useAuth();
-  const isSuperadmin = user?.product_role === 'superadmin';
+  const isStaff =
+    user?.product_role === 'superadmin' || user?.product_role === 'technical_director';
 
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,27 +45,18 @@ export default function ApprovedTrainers() {
     load();
   }, []);
 
-  // Load the pick lists (superadmin only; relies on superadmin read access)
+  // Candidate pick lists come from a guarded lookup, so the underlying user and
+  // consultant tables stay closed.
   useEffect(() => {
-    if (!isSuperadmin) return;
-    supabase
-      .from('users')
-      .select('id, full_name, email')
-      .eq('product_role', 'technical_director')
-      .eq('is_active', true)
-      .then(({ data }) => {
-        setTdOptions((data ?? []).map((u) => ({ id: u.id, name: u.full_name || u.email })));
-      });
-    supabase
-      .from('consultants')
-      .select('id, full_name, company_email, email')
-      .eq('is_active', true)
-      .then(({ data }) => {
-        setConsultantOptions(
-          (data ?? []).map((c) => ({ id: c.id, name: c.full_name || c.company_email || c.email })),
-        );
-      });
-  }, [isSuperadmin]);
+    if (!isStaff) return;
+    supabase.rpc('trainer_candidates').then(({ data }) => {
+      const rows = (data as { kind: string; id: string; name: string }[]) ?? [];
+      setTdOptions(rows.filter((r) => r.kind === 'td').map((r) => ({ id: r.id, name: r.name })));
+      setConsultantOptions(
+        rows.filter((r) => r.kind === 'consultant').map((r) => ({ id: r.id, name: r.name })),
+      );
+    });
+  }, [isStaff]);
 
   const usedUserIds = new Set(trainers.map((t) => t.user_id).filter(Boolean));
   const usedConsultantIds = new Set(trainers.map((t) => t.consultant_id).filter(Boolean));
@@ -74,11 +66,9 @@ export default function ApprovedTrainers() {
   async function addTd() {
     const opt = availableTds.find((o) => o.id === tdPick);
     if (!opt) return;
-    const { error } = await supabase.from('trainers').insert({
-      kind: 'technical_director',
-      user_id: opt.id,
-      display_name: opt.name,
-    });
+    const { error } = await supabase
+      .from('trainers')
+      .insert({ kind: 'technical_director', user_id: opt.id, display_name: opt.name });
     if (error) setError(error.message);
     setTdPick('');
     load();
@@ -87,11 +77,9 @@ export default function ApprovedTrainers() {
   async function addConsultant() {
     const opt = availableConsultants.find((o) => o.id === consultantPick);
     if (!opt) return;
-    const { error } = await supabase.from('trainers').insert({
-      kind: 'consultant',
-      consultant_id: opt.id,
-      display_name: opt.name,
-    });
+    const { error } = await supabase
+      .from('trainers')
+      .insert({ kind: 'consultant', consultant_id: opt.id, display_name: opt.name });
     if (error) setError(error.message);
     setConsultantPick('');
     load();
@@ -122,7 +110,7 @@ export default function ApprovedTrainers() {
 
   return (
     <div>
-      {isSuperadmin && (
+      {isStaff && (
         <div className="card add-trainers">
           <h2>Add an approved trainer</h2>
           <p className="muted">
@@ -187,7 +175,7 @@ export default function ApprovedTrainers() {
                 <th>Name</th>
                 <th>Type</th>
                 <th>Contact</th>
-                {isSuperadmin && <th></th>}
+                {isStaff && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -200,7 +188,7 @@ export default function ApprovedTrainers() {
                       ? [t.contact_email, t.contact_phone].filter(Boolean).join(' · ') || '-'
                       : '-'}
                   </td>
-                  {isSuperadmin && (
+                  {isStaff && (
                     <td className="row-actions">
                       <button className="btn btn-ghost btn-sm" onClick={() => remove(t.id)}>Remove</button>
                     </td>

@@ -6,6 +6,47 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Trainer management opened to Technical Directors
+
+**What and why.** Trainer management is a Technical Director responsibility, not just a
+superadmin one. Trainers can now be added and removed by any staff member (superadmin or
+Technical Director). To let a TD pick trainers without opening up the user and consultant
+tables, picking goes through a guarded lookup, `trainer_candidates()`, which returns only
+id and name to a staff caller. `docs/SCHEMA.md` updated for the new write access.
+
+**SQL (safe to re-run):**
+
+```sql
+drop policy if exists trainers_write_superadmin on public.trainers;
+drop policy if exists trainers_write_staff on public.trainers;
+create policy trainers_write_staff on public.trainers
+  for all using (public.is_staff()) with check (public.is_staff());
+
+create or replace function public.trainer_candidates()
+returns table (kind text, id text, name text)
+language sql security definer set search_path = public as $$
+  select 'td'::text, u.id::text, coalesce(u.full_name, u.email)
+  from public.users u
+  where public.is_staff() and u.product_role = 'technical_director' and u.is_active
+  union all
+  select 'consultant'::text, c.id::text, coalesce(c.full_name, c.company_email, c.email)
+  from public.consultants c
+  where public.is_staff() and c.is_active;
+$$;
+grant execute on function public.trainer_candidates() to authenticated;
+```
+
+**Undo:**
+
+```sql
+drop function if exists public.trainer_candidates();
+drop policy if exists trainers_write_staff on public.trainers;
+create policy trainers_write_superadmin on public.trainers
+  for all using (public.is_superadmin()) with check (public.is_superadmin());
+```
+
+---
+
 ## Approved trainers registry
 
 **What and why.** Adds `public.trainers`, the registry of who may deliver a training:

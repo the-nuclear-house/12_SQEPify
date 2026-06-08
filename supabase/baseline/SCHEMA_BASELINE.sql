@@ -235,5 +235,20 @@ drop policy if exists trainers_select_staff on public.trainers;
 create policy trainers_select_staff on public.trainers for select using (public.is_staff());
 
 drop policy if exists trainers_write_superadmin on public.trainers;
-create policy trainers_write_superadmin on public.trainers
-  for all using (public.is_superadmin()) with check (public.is_superadmin());
+drop policy if exists trainers_write_staff on public.trainers;
+create policy trainers_write_staff on public.trainers
+  for all using (public.is_staff()) with check (public.is_staff());
+
+-- Guarded lookup so staff can pick trainers without the user/consultant tables being opened up
+create or replace function public.trainer_candidates()
+returns table (kind text, id text, name text)
+language sql security definer set search_path = public as $$
+  select 'td'::text, u.id::text, coalesce(u.full_name, u.email)
+  from public.users u
+  where public.is_staff() and u.product_role = 'technical_director' and u.is_active
+  union all
+  select 'consultant'::text, c.id::text, coalesce(c.full_name, c.company_email, c.email)
+  from public.consultants c
+  where public.is_staff() and c.is_active;
+$$;
+grant execute on function public.trainer_candidates() to authenticated;
