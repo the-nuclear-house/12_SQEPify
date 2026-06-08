@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
+import NuclearisationProcess from '../components/NuclearisationProcess';
 import type { Consultant, Role, Assessment, AssessmentRole } from '../lib/types';
 
 const STEPS = [
@@ -9,7 +10,7 @@ const STEPS = [
   { key: 'self', label: 'Self-assessment' },
   { key: 'validation', label: 'Validation' },
   { key: 'plan', label: 'Plan' },
-  { key: 'done', label: 'Done' },
+  { key: 'done', label: 'Nuclearised' },
 ];
 
 function stepIndex(status: Assessment['status'] | null): number {
@@ -113,14 +114,7 @@ export default function ConsultantProfile() {
 
       {error && <p className="sync-msg err">{error}</p>}
 
-      <ol className="stepper">
-        {STEPS.map((s, i) => (
-          <li key={s.key} className={`step ${i === current ? 'active' : i < current ? 'done' : 'todo'}`}>
-            <span className="step-num">{i < current ? '✓' : i + 1}</span>
-            <span className="step-label">{s.label}</span>
-          </li>
-        ))}
-      </ol>
+      <NuclearisationProcess steps={STEPS.map((s) => s.label)} current={current} />
 
       {current === 0 ? (
         <div className="card">

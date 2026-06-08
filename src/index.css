@@ -1301,25 +1301,119 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .lp-actions { display: flex; gap: 12px; align-items: center; margin: 0 0 16px; }
 .lp-add-training { margin-top: 8px; cursor: pointer; }
 
-/* Assessment stepper */
-.stepper {
-  display: flex; list-style: none; padding: 0; margin: 0 0 20px; gap: 6px; flex-wrap: wrap;
+/* Nuclearisation process header */
+.nuke {
+  position: relative;
+  padding: 22px 52px 18px;
+  margin-bottom: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(130% 120% at 50% -10%, rgba(0,174,239,0.10), transparent 55%),
+    var(--surface);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
 }
-.stepper .step {
-  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px;
-  padding: 10px 12px; border-radius: var(--radius-sm);
-  background: var(--surface); border: 1px solid var(--border);
+.nuke-complete {
+  background:
+    radial-gradient(130% 120% at 50% -10%, rgba(132,195,65,0.12), transparent 55%),
+    var(--surface);
 }
-.stepper .step-num {
+.nuke-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+.nuke-title {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-family: var(--font-display); font-size: 14px; font-weight: 700;
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--text);
+}
+.nuke-orb {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--brand-cyan); box-shadow: 0 0 10px var(--brand-cyan);
+  animation: nuke-orb 2.4s ease-in-out infinite;
+}
+.nuke-complete .nuke-orb { background: var(--brand-green); box-shadow: 0 0 10px var(--brand-green); }
+.nuke-stage { font-family: var(--font-mono); font-size: 12px; color: var(--brand-cyan); }
+.nuke-complete .nuke-stage { color: var(--brand-green); }
+
+.nuke-track-wrap { position: relative; height: 60px; }
+.nuke-track {
+  position: absolute; left: 0; right: 0; top: 14px; height: 4px;
+  background: var(--border-soft); border-radius: 4px;
+}
+.nuke-fill {
+  position: absolute; left: 0; top: 6px; height: 20px;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.nuke-fill::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 8px; height: 4px; border-radius: 4px;
+  background: linear-gradient(90deg, rgba(0,174,239,0.5), var(--brand-cyan) 70%, var(--brand-green));
+  box-shadow: 0 0 12px rgba(0,174,239,0.55);
+}
+.nuke-complete .nuke-fill::before {
+  background: linear-gradient(90deg, var(--brand-green), #a6d95f);
+  box-shadow: 0 0 14px rgba(132,195,65,0.6);
+}
+.nuke-particle {
+  position: absolute; left: 0; border-radius: 50%;
+  background: radial-gradient(circle, #cdefff 0%, var(--brand-cyan) 60%, transparent 100%);
+  box-shadow: 0 0 6px var(--brand-cyan);
+  transform: translateY(-50%);
+  animation-name: nuke-flow; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+.nuke-complete .nuke-particle {
+  background: radial-gradient(circle, #eaffd6 0%, var(--brand-green) 60%, transparent 100%);
+  box-shadow: 0 0 6px var(--brand-green);
+}
+
+.nuke-nodes { position: absolute; left: 0; right: 0; top: 0; height: 100%; }
+.nuke-node {
+  position: absolute; top: 0; transform: translateX(-50%);
+  width: 100px; display: flex; flex-direction: column; align-items: center; gap: 9px;
+}
+.nuke-dot {
+  position: relative; z-index: 2;
+  width: 32px; height: 32px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700;
-  background: var(--surface-3); color: var(--text-muted); flex-shrink: 0;
+  font-size: 13px; font-weight: 700;
+  background: var(--surface-3); color: var(--text-faint);
+  border: 1px solid var(--border);
 }
-.stepper .step-label { font-size: 13px; color: var(--text-muted); }
-.stepper .step.active { border-color: var(--accent); background: rgba(0,174,239,0.08); }
-.stepper .step.active .step-num { background: var(--accent); color: #06121b; }
-.stepper .step.active .step-label { color: var(--text); font-weight: 600; }
-.stepper .step.done .step-num { background: var(--brand-green); color: #06121b; }
+.nuke-label {
+  font-size: 11px; text-align: center; line-height: 1.25; color: var(--text-faint);
+  white-space: nowrap;
+}
+.nuke-node.done .nuke-dot { background: var(--brand-green); color: #06121b; border-color: transparent; }
+.nuke-node.done .nuke-label { color: var(--text-muted); }
+.nuke-node.active .nuke-dot {
+  background: var(--brand-cyan); color: #06121b; border-color: transparent;
+  animation: nuke-pulse 2s ease-out infinite;
+}
+.nuke-node.active .nuke-label { color: var(--text); font-weight: 600; }
+
+@keyframes nuke-flow {
+  0% { left: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+@keyframes nuke-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0,174,239,0.5); }
+  70% { box-shadow: 0 0 0 11px rgba(0,174,239,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,174,239,0); }
+}
+@keyframes nuke-orb {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+@media (max-width: 640px) {
+  .nuke { padding: 18px 34px 14px; }
+  .nuke-node { width: 66px; }
+  .nuke-label { font-size: 10px; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nuke-particle { display: none; }
+  .nuke-node.active .nuke-dot, .nuke-orb { animation: none; }
+}
 
 .panel-title { margin: 0 0 6px; font-size: 18px; }
 .role-pick { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; }
