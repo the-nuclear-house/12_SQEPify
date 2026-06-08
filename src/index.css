@@ -557,3 +557,8 @@ button {
   font-size: 12px;
   color: var(--text-faint);
 }
+
+.badge-active {
+  color: var(--brand-green);
+  background: rgba(132, 195, 65, 0.14);
+}

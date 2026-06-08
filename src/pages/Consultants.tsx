@@ -83,18 +83,17 @@ export default function Consultants() {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.id} className={c.is_active ? '' : 'is-left'}>
+                  <td>{c.full_name || '-'}</td>
+                  <td className="mono-cell">{c.company_email || c.email}</td>
+                  <td>{c.job_title || '-'}</td>
+                  <td>{c.td_full_name || c.td_email || '-'}</td>
                   <td>
-                    {c.full_name || '—'}
-                    {!c.is_active && (
-                      <span className="badge badge-left" title={`Left ${fmtDate(c.left_at)}`}>
-                        Left {fmtDate(c.left_at)}
-                      </span>
+                    {c.is_active ? (
+                      <span className="badge badge-active">Active</span>
+                    ) : (
+                      <span className="badge badge-left">Left {fmtDate(c.left_at)}</span>
                     )}
                   </td>
-                  <td className="mono-cell">{c.company_email || c.email}</td>
-                  <td>{c.job_title || '—'}</td>
-                  <td>{c.td_full_name || c.td_email || '—'}</td>
-                  <td>{c.status || '—'}</td>
                 </tr>
               ))}
             </tbody>
