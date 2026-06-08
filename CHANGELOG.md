@@ -6,6 +6,26 @@ exact SQL that was run, and the SQL to undo it. Newest first. See
 
 ---
 
+## Learning paths moved inside the competency, trainings now chosen per level
+
+**What and why.** Opening a competency in the Library now lands on its learning path (no
+separate button). Each level shows what it means for that competency, and for every level
+above "no knowledge" you pick the trainings needed to reach it from the catalogue, rather
+than them being matched automatically. Editing a competency's name and description, and
+deleting it, are available from the same view. Any older per-level descriptors are folded in.
+
+**SQL (safe to re-run):** creates `competency_level_trainings` (competency, level, training)
+with staff-only RLS, and migrates existing `level_descriptors` into the learning path. See
+the block in chat.
+
+**Undo:**
+
+```sql
+drop table if exists public.competency_level_trainings;
+```
+
+---
+
 ## Required level per competency on a role
 
 **What and why.** Each competency in a role now carries a required level (Awareness, Basic,

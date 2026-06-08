@@ -392,6 +392,18 @@ create policy clp_read on public.competency_level_paths for select using (public
 drop policy if exists clp_write on public.competency_level_paths;
 create policy clp_write on public.competency_level_paths for all using (public.is_staff()) with check (public.is_staff());
 
+create table if not exists public.competency_level_trainings (
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  level int not null check (level between 2 and 5),
+  training_id uuid not null references public.trainings(id) on delete cascade,
+  primary key (competency_id, level, training_id)
+);
+alter table public.competency_level_trainings enable row level security;
+drop policy if exists clt_read on public.competency_level_trainings;
+create policy clt_read on public.competency_level_trainings for select using (public.is_staff());
+drop policy if exists clt_write on public.competency_level_trainings;
+create policy clt_write on public.competency_level_trainings for all using (public.is_staff()) with check (public.is_staff());
+
 create table if not exists public.trainings (
   id uuid primary key default gen_random_uuid(),
   title text not null,

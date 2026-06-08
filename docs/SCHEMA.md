@@ -157,3 +157,10 @@ Each row in `role_competencies` carries `required_level` (1 to 5, default 4), th
 level that role needs for that competency. The same competency can be required at different
 levels in different roles. A consultant's gap on a competency is this target minus their
 assessed level, taken across Base Nuclear plus their selected roles.
+
+## competency_level_trainings
+
+Which trainings make up the learning path for a competency at each level. One row per
+(competency, level 2 to 5, training). The trainings are chosen explicitly by staff in the
+competency's learning path, not derived from training bands. Read and write are staff-only.
+Per-level descriptions ("what this level means") live in `competency_level_paths.actions`.

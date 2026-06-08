@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import ConfirmDialog from './ConfirmDialog';
+import LearningPath from './LearningPath';
 import type {
   Competency,
   CompetencyCategory,
@@ -16,17 +17,8 @@ type NodeModal =
 
 type CompModal =
   | { mode: 'new'; subcategoryId: string; categoryId: string }
-  | { mode: 'view'; comp: Competency }
   | { mode: 'edit'; comp: Competency }
   | null;
-
-const STAR_LEVELS = [
-  { n: 1, label: 'No knowledge' },
-  { n: 2, label: 'Awareness' },
-  { n: 3, label: 'Basic competence' },
-  { n: 4, label: 'Full competence (SQEP)' },
-  { n: 5, label: 'Expert / can train others' },
-];
 
 export default function CompetencyLibrary() {
   const [cats, setCats] = useState<CompetencyCategory[]>([]);
@@ -41,10 +33,9 @@ export default function CompetencyLibrary() {
   const [nodeName, setNodeName] = useState('');
 
   const [modal, setModal] = useState<CompModal>(null);
+  const [pathComp, setPathComp] = useState<Competency | null>(null);
   const [mName, setMName] = useState('');
   const [mDesc, setMDesc] = useState('');
-  const [mLevels, setMLevels] = useState<Record<string, string>>({});
-  const [showLevels, setShowLevels] = useState(false);
 
   const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
@@ -125,30 +116,24 @@ export default function CompetencyLibrary() {
 
   // ----- competency add / view / edit -----
   function openNew(categoryId: string, subcategoryId: string) {
-    setMName(''); setMDesc(''); setMLevels({}); setShowLevels(false);
+    setMName(''); setMDesc('');
     setModal({ mode: 'new', categoryId, subcategoryId });
   }
-  function openView(comp: Competency) { setModal({ mode: 'view', comp }); }
   function startEditComp(comp: Competency) {
     setMName(comp.name); setMDesc(comp.description ?? '');
-    setMLevels(comp.level_descriptors ?? {});
-    setShowLevels(!!comp.level_descriptors && Object.keys(comp.level_descriptors).length > 0);
     setModal({ mode: 'edit', comp });
   }
   const saveComp = () => {
-    if (!modal || modal.mode === 'view') return;
+    if (!modal) return;
     if (!mName.trim() || !mDesc.trim()) return;
-    const ld: Record<string, string> = {};
-    STAR_LEVELS.forEach((l) => { const v = (mLevels[l.n] ?? '').trim(); if (v) ld[String(l.n)] = v; });
-    const level_descriptors = Object.keys(ld).length ? ld : null;
     if (modal.mode === 'new') {
       run(supabase.from('competencies').insert({
         category_id: modal.categoryId, subcategory_id: modal.subcategoryId,
-        name: mName.trim(), description: mDesc.trim(), level_descriptors,
+        name: mName.trim(), description: mDesc.trim(),
       }));
     } else {
       run(supabase.from('competencies').update({
-        name: mName.trim(), description: mDesc.trim(), level_descriptors,
+        name: mName.trim(), description: mDesc.trim(),
       }).eq('id', modal.comp.id));
     }
   };
@@ -218,7 +203,7 @@ export default function CompetencyLibrary() {
                     </div>
                     <div className="comp-grid">
                       {activeComps.map((c) => (
-                        <button className="comp-card" key={c.id} onClick={() => openView(c)} title="View details">
+                        <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
                           <span className="c-name">{c.name}</span>
                         </button>
                       ))}
@@ -262,70 +247,35 @@ export default function CompetencyLibrary() {
         </div>
       )}
 
-      {/* competency modal */}
+      {/* competency add / edit modal */}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>{modal.mode === 'view' ? modal.comp.name : modal.mode === 'edit' ? 'Edit competency' : 'Add competency'}</h2>
+              <h2>{modal.mode === 'edit' ? 'Edit competency' : 'Add competency'}</h2>
               <button className="modal-close" onClick={() => setModal(null)} aria-label="Close">×</button>
             </div>
 
-            {modal.mode === 'view' ? (
-              <div className="modal-body">
-                <p className="comp-modal-desc">{modal.comp.description || 'No description.'}</p>
-                {modal.comp.level_descriptors && Object.keys(modal.comp.level_descriptors).length > 0 && (
-                  <div className="level-list">
-                    {STAR_LEVELS.map((l) => {
-                      const v = modal.comp.level_descriptors?.[String(l.n)];
-                      if (!v) return null;
-                      return (
-                        <div className="level-line" key={l.n}>
-                          <span className={`level-chip lvl-${l.n}`}>{l.n}★</span>
-                          <span className="level-text"><strong>{l.label}.</strong> {v}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="modal-actions">
-                  <button className="btn btn-sm" onClick={() => startEditComp(modal.comp)}>Edit</button>
-                  <button className="link-btn danger" onClick={() => deleteComp(modal.comp)}>Delete</button>
-                </div>
-              </div>
-            ) : (
-              <div className="modal-step">
-                <label>Name</label>
-                <input className="field" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="Competency name" autoFocus />
-                <label>Description</label>
-                <textarea className="field" rows={2} value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="What this competency covers" />
-
-                <button className="levels-toggle" onClick={() => setShowLevels((s) => !s)}>
-                  {showLevels ? '▾' : '▸'} Star level descriptors (optional)
-                </button>
-                {showLevels && (
-                  <div className="levels-edit">
-                    {STAR_LEVELS.map((l) => (
-                      <div className="level-edit-row" key={l.n}>
-                        <span className={`level-chip lvl-${l.n}`}>{l.n}★</span>
-                        <input
-                          className="field"
-                          placeholder={`${l.label} — what this looks like here`}
-                          value={mLevels[l.n] ?? ''}
-                          onChange={(e) => setMLevels({ ...mLevels, [l.n]: e.target.value })}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button className="btn btn-primary btn-block" onClick={saveComp} disabled={!mName.trim() || !mDesc.trim()}>
-                  {modal.mode === 'new' ? 'Add competency' : 'Save changes'}
-                </button>
-              </div>
-            )}
+            <div className="modal-step">
+              <label>Name</label>
+              <input className="field" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="Competency name" autoFocus />
+              <label>Description</label>
+              <textarea className="field" rows={2} value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="What this competency covers" />
+              <button className="btn btn-primary btn-block" onClick={saveComp} disabled={!mName.trim() || !mDesc.trim()}>
+                {modal.mode === 'new' ? 'Add competency' : 'Save changes'}
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {pathComp && (
+        <LearningPath
+          competency={pathComp}
+          onClose={() => setPathComp(null)}
+          onEdit={(c) => { setPathComp(null); startEditComp(c); }}
+          onDelete={(c) => { setPathComp(null); deleteComp(c); }}
+        />
       )}
 
       {confirm && (

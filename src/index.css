@@ -1296,3 +1296,7 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .star-rate-sm .star-rate-label { font-size: 10px; min-width: 56px; }
 .star-rate-md .star-btn { font-size: 18px; }
 .star-rate-md .star-rate-label { font-size: 12px; min-width: 64px; }
+
+/* Learning path: edit/delete row + add-training select */
+.lp-actions { display: flex; gap: 12px; align-items: center; margin: 0 0 16px; }
+.lp-add-training { margin-top: 8px; cursor: pointer; }

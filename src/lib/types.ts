@@ -138,3 +138,9 @@ export interface CompetencyLevelPath {
   actions: string | null;
   verification: string | null;
 }
+
+export interface CompetencyLevelTraining {
+  competency_id: string;
+  level: number;
+  training_id: string;
+}
