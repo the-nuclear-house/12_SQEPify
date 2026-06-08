@@ -1,3 +1,27 @@
+## Consultant self-service reads (widen taxonomy/roles to signed-in users)
+
+**What and why.** Consultants now have their own locked-down view (their profile only) and
+complete their self-assessment there. For their profile to load, a signed-in consultant must be
+able to read the competency framework and roles. These are reference data, not sensitive, so the
+read policies on competencies, competency_categories, competency_subcategories, roles and
+role_competencies move from staff-only to any authenticated user. Writes stay staff-only. The
+consultants table already lets a consultant read their own row.
+
+**SQL (safe to re-run).**
+```sql
+drop policy if exists comp_read on public.competencies;
+create policy comp_read on public.competencies for select using (auth.role() = 'authenticated');
+drop policy if exists comp_cat_read on public.competency_categories;
+create policy comp_cat_read on public.competency_categories for select using (auth.role() = 'authenticated');
+drop policy if exists comp_sub_read on public.competency_subcategories;
+create policy comp_sub_read on public.competency_subcategories for select using (auth.role() = 'authenticated');
+drop policy if exists roles_read on public.roles;
+create policy roles_read on public.roles for select using (auth.role() = 'authenticated');
+drop policy if exists rc_read on public.role_competencies;
+create policy rc_read on public.role_competencies for select using (auth.role() = 'authenticated');
+```
+
+**Undo.** Set each of those read policies back to `using (public.is_staff())`.
 ## parse-cv-nuclear: adopt the Control Room's proven file/URL dispatch
 
 **What and why.** Reworked the CV input to mirror the Control Room's `parse-requirement`

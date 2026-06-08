@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import NuclearisationProcess from '../components/NuclearisationProcess';
@@ -365,6 +365,7 @@ export default function ConsultantProfile() {
     setSaving(false); setModalStep(null); load();
   }
 
+  if (user?.product_role === 'consultant' && !isSelf) return <Navigate to="/" replace />;
   if (loading) return <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>;
   if (!consultant) return <div className="card"><p className="muted" style={{ padding: 16 }}>Consultant not found. <Link to="/consultants">Back to consultants</Link></p></div>;
 

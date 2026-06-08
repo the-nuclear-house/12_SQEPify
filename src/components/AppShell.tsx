@@ -67,9 +67,11 @@ function GearIcon() {
 export default function AppShell() {
   const { user, signOut } = useAuth();
   const role = user?.product_role ?? 'consultant';
-  const overview = OVERVIEW.filter((t) => t.roles.includes(role));
-  const core = CORE.filter((t) => t.roles.includes(role));
+  const isConsultant = role === 'consultant';
+  const overview = isConsultant ? [] : OVERVIEW.filter((t) => t.roles.includes(role));
+  const core = isConsultant ? [] : CORE.filter((t) => t.roles.includes(role));
   const isSuperadmin = role === 'superadmin';
+  const myProfile = isConsultant && user?.consultant_id ? `/consultants/${user.consultant_id}` : null;
 
   return (
     <div className="app-frame">
@@ -87,6 +89,7 @@ export default function AppShell() {
         </div>
 
         <nav className="navpills">
+          {myProfile && <Pill to={myProfile} label="My profile" />}
           {overview.map((t) => (
             <Pill key={t.to} to={t.to} label={t.label} />
           ))}

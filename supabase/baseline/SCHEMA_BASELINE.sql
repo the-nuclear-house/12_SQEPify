@@ -290,17 +290,17 @@ alter table public.competency_subcategories enable row level security;
 alter table public.competencies enable row level security;
 
 drop policy if exists comp_cat_read on public.competency_categories;
-create policy comp_cat_read on public.competency_categories for select using (public.is_staff());
+create policy comp_cat_read on public.competency_categories for select using (auth.role() = 'authenticated');
 drop policy if exists comp_cat_write on public.competency_categories;
 create policy comp_cat_write on public.competency_categories for all using (public.is_staff()) with check (public.is_staff());
 
 drop policy if exists comp_sub_read on public.competency_subcategories;
-create policy comp_sub_read on public.competency_subcategories for select using (public.is_staff());
+create policy comp_sub_read on public.competency_subcategories for select using (auth.role() = 'authenticated');
 drop policy if exists comp_sub_write on public.competency_subcategories;
 create policy comp_sub_write on public.competency_subcategories for all using (public.is_staff()) with check (public.is_staff());
 
 drop policy if exists comp_read on public.competencies;
-create policy comp_read on public.competencies for select using (public.is_staff());
+create policy comp_read on public.competencies for select using (auth.role() = 'authenticated');
 drop policy if exists comp_write on public.competencies;
 create policy comp_write on public.competencies for all using (public.is_staff()) with check (public.is_staff());
 
@@ -363,11 +363,11 @@ create trigger trg_role_exclusivity before insert on public.role_competencies
 alter table public.roles enable row level security;
 alter table public.role_competencies enable row level security;
 drop policy if exists roles_read on public.roles;
-create policy roles_read on public.roles for select using (public.is_staff());
+create policy roles_read on public.roles for select using (auth.role() = 'authenticated');
 drop policy if exists roles_write on public.roles;
 create policy roles_write on public.roles for all using (public.is_staff()) with check (public.is_staff());
 drop policy if exists rc_read on public.role_competencies;
-create policy rc_read on public.role_competencies for select using (public.is_staff());
+create policy rc_read on public.role_competencies for select using (auth.role() = 'authenticated');
 drop policy if exists rc_write on public.role_competencies;
 create policy rc_write on public.role_competencies for all using (public.is_staff()) with check (public.is_staff());
 

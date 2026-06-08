@@ -38,8 +38,22 @@ export default function App() {
                 </RequireRole>
               }
             />
-            <Route path="trainings" element={<Trainings />} />
-            <Route path="consultants" element={<Consultants />} />
+            <Route
+              path="trainings"
+              element={
+                <RequireRole allow={['superadmin', 'technical_director']}>
+                  <Trainings />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="consultants"
+              element={
+                <RequireRole allow={['superadmin', 'technical_director']}>
+                  <Consultants />
+                </RequireRole>
+              }
+            />
             <Route path="consultants/:id" element={<ConsultantProfile />} />
             <Route
               path="system"
