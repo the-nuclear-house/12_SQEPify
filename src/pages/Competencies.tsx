@@ -6,8 +6,12 @@ import type {
   CompetencySubcategory,
 } from '../lib/types';
 
-type EditTarget =
-  | { kind: 'category' | 'subcategory' | 'competency'; id: string }
+type EditNode = { kind: 'category' | 'subcategory'; id: string } | null;
+
+type CompModal =
+  | { mode: 'new'; categoryId: string; subcategoryId: string | null }
+  | { mode: 'view'; comp: Competency }
+  | { mode: 'edit'; comp: Competency }
   | null;
 
 export default function Competencies() {
@@ -18,20 +22,22 @@ export default function Competencies() {
   const [error, setError] = useState<string | null>(null);
 
   const [newCat, setNewCat] = useState('');
-  const [adder, setAdder] = useState<string | null>(null);
-  const [adderText, setAdderText] = useState('');
-  const [adderDesc, setAdderDesc] = useState('');
+  const [addingSubFor, setAddingSubFor] = useState<string | null>(null);
+  const [subText, setSubText] = useState('');
 
-  const [edit, setEdit] = useState<EditTarget>(null);
+  const [edit, setEdit] = useState<EditNode>(null);
   const [editName, setEditName] = useState('');
-  const [editDesc, setEditDesc] = useState('');
+
+  const [modal, setModal] = useState<CompModal>(null);
+  const [mName, setMName] = useState('');
+  const [mDesc, setMDesc] = useState('');
 
   async function load() {
     setLoading(true);
     const [c, s, k] = await Promise.all([
-      supabase.from('competency_categories').select('*').order('name'),
-      supabase.from('competency_subcategories').select('*').order('name'),
-      supabase.from('competencies').select('*').order('name'),
+      supabase.from('competency_categories').select('*').order('sort_order').order('name'),
+      supabase.from('competency_subcategories').select('*').order('sort_order').order('name'),
+      supabase.from('competencies').select('*').order('sort_order').order('name'),
     ]);
     const err = c.error || s.error || k.error;
     if (err) setError(err.message);
@@ -63,17 +69,13 @@ export default function Competencies() {
     return m;
   }, [comps]);
 
-  function resetAdder() {
-    setAdder(null);
-    setAdderText('');
-    setAdderDesc('');
-  }
-
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
     const { error } = await p;
     if (error) setError(error.message);
-    resetAdder();
     setEdit(null);
+    setAddingSubFor(null);
+    setSubText('');
+    setModal(null);
     load();
   }
 
@@ -83,103 +85,82 @@ export default function Competencies() {
     setNewCat('');
   };
   const addSubcategory = (categoryId: string) => {
-    if (!adderText.trim()) return;
-    run(
-      supabase
-        .from('competency_subcategories')
-        .insert({ category_id: categoryId, name: adderText.trim() }),
-    );
+    if (!subText.trim()) return;
+    run(supabase.from('competency_subcategories').insert({ category_id: categoryId, name: subText.trim() }));
   };
-  const addCompetency = (categoryId: string, subcategoryId: string | null) => {
-    if (!adderText.trim() || !adderDesc.trim()) return;
-    run(
-      supabase.from('competencies').insert({
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        name: adderText.trim(),
-        description: adderDesc.trim(),
-      }),
-    );
-  };
-
-  const saveEdit = () => {
+  const renameNode = () => {
     if (!edit || !editName.trim()) return;
-    if (edit.kind === 'competency' && !editDesc.trim()) return;
-    const table =
-      edit.kind === 'category'
-        ? 'competency_categories'
-        : edit.kind === 'subcategory'
-          ? 'competency_subcategories'
-          : 'competencies';
-    const patch: Record<string, unknown> = { name: editName.trim() };
-    if (edit.kind === 'competency') patch.description = editDesc.trim();
-    run(supabase.from(table).update(patch).eq('id', edit.id));
+    const table = edit.kind === 'category' ? 'competency_categories' : 'competency_subcategories';
+    run(supabase.from(table).update({ name: editName.trim() }).eq('id', edit.id));
   };
-
-  const del = (kind: 'category' | 'subcategory' | 'competency', id: string, warn: string) => {
+  const delNode = (kind: 'category' | 'subcategory', id: string, warn: string) => {
     if (!window.confirm(warn)) return;
-    const table =
-      kind === 'category'
-        ? 'competency_categories'
-        : kind === 'subcategory'
-          ? 'competency_subcategories'
-          : 'competencies';
+    const table = kind === 'category' ? 'competency_categories' : 'competency_subcategories';
     run(supabase.from(table).delete().eq('id', id));
   };
 
-  function startEdit(t: Exclude<EditTarget, null>, name: string, desc?: string) {
-    setEdit(t);
-    setEditName(name);
-    setEditDesc(desc ?? '');
+  function openNew(categoryId: string, subcategoryId: string | null) {
+    setMName('');
+    setMDesc('');
+    setModal({ mode: 'new', categoryId, subcategoryId });
   }
-
-  // Plain render helpers (NOT nested components) so inputs keep focus while typing.
-  function competencyRow(c: Competency) {
-    const editing = edit?.kind === 'competency' && edit.id === c.id;
-    if (editing) {
-      return (
-        <div className="comp-row editing" key={c.id}>
-          <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Competency name" />
-          <input className="field" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description" />
-          <div className="tree-actions">
-            <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim() || !editDesc.trim()}>Save</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
-          </div>
-        </div>
+  function openView(comp: Competency) {
+    setModal({ mode: 'view', comp });
+  }
+  function startEditComp(comp: Competency) {
+    setMName(comp.name);
+    setMDesc(comp.description ?? '');
+    setModal({ mode: 'edit', comp });
+  }
+  const saveComp = () => {
+    if (!modal || modal.mode === 'view') return;
+    if (!mName.trim() || !mDesc.trim()) return;
+    if (modal.mode === 'new') {
+      run(
+        supabase.from('competencies').insert({
+          category_id: modal.categoryId,
+          subcategory_id: modal.subcategoryId,
+          name: mName.trim(),
+          description: mDesc.trim(),
+        }),
+      );
+    } else {
+      run(
+        supabase
+          .from('competencies')
+          .update({ name: mName.trim(), description: mDesc.trim() })
+          .eq('id', modal.comp.id),
       );
     }
+  };
+  const deleteComp = (comp: Competency) => {
+    if (!window.confirm(`Delete competency "${comp.name}"?`)) return;
+    run(supabase.from('competencies').delete().eq('id', comp.id));
+  };
+
+  function competencyGrid(list: Competency[], categoryId: string, subcategoryId: string | null) {
     return (
-      <div className="comp-row" key={c.id}>
-        <div className="comp-name">
-          {c.name}
-          {c.description && <span className="comp-desc">{c.description}</span>}
-        </div>
-        <div className="tree-actions">
-          <button className="link-btn" onClick={() => startEdit({ kind: 'competency', id: c.id }, c.name, c.description ?? '')}>Edit</button>
-          <button className="link-btn danger" onClick={() => del('competency', c.id, `Delete competency "${c.name}"?`)}>Delete</button>
-        </div>
+      <div className="comp-grid">
+        {list.map((c) => (
+          <button className="comp-card" key={c.id} onClick={() => openView(c)} title="View details">
+            <span className="c-name">{c.name}</span>
+          </button>
+        ))}
+        <button className="comp-card comp-add" onClick={() => openNew(categoryId, subcategoryId)}>
+          <span className="plus">+</span>
+          <span>Add competency</span>
+        </button>
       </div>
     );
   }
 
-  function addCompetencyRow(categoryId: string, subcategoryId: string | null) {
-    const token = `comp:${subcategoryId ?? categoryId}`;
-    if (adder !== token) {
-      return (
-        <button className="link-btn add" key={token} onClick={() => { resetAdder(); setAdder(token); }}>+ Add competency</button>
-      );
-    }
-    return (
-      <div className="comp-row editing" key={token}>
-        <input className="field" value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Competency name" />
-        <input className="field" value={adderDesc} onChange={(e) => setAdderDesc(e.target.value)} placeholder="Description" />
-        <div className="tree-actions">
-          <button className="btn btn-sm btn-primary" onClick={() => addCompetency(categoryId, subcategoryId)} disabled={!adderText.trim() || !adderDesc.trim()}>Add</button>
-          <button className="btn btn-sm btn-ghost" onClick={resetAdder}>Cancel</button>
-        </div>
-      </div>
-    );
-  }
+  const renameRow = (
+    <div className="rename-row">
+      <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus />
+      <button className="btn btn-sm btn-primary" onClick={renameNode} disabled={!editName.trim()}>Save</button>
+      <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
+    </div>
+  );
 
   return (
     <div>
@@ -187,7 +168,7 @@ export default function Competencies() {
         <h1>Nuclear Competencies</h1>
         <p>
           The competency library, organised as Category, then optional Subcategory, then
-          Competency. This is the backbone the trainings and assessments hang off.
+          Competency. Click a competency to see its detail.
         </p>
       </div>
 
@@ -206,72 +187,54 @@ export default function Competencies() {
             const directComps = compsBySub[`cat:${cat.id}`] ?? [];
             const catEditing = edit?.kind === 'category' && edit.id === cat.id;
             return (
-              <div className="card comp-cat" key={cat.id}>
-                <div className="comp-cat-head">
-                  {catEditing ? (
-                    <div className="comp-row editing" style={{ flex: 1 }}>
-                      <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                      <div className="tree-actions">
-                        <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim()}>Save</button>
-                        <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
+              <section className="comp-cat" key={cat.id}>
+                <header className="comp-cat-head">
+                  {catEditing ? renameRow : (
                     <>
                       <h2>{cat.name}</h2>
                       <div className="tree-actions">
-                        <button className="link-btn" onClick={() => startEdit({ kind: 'category', id: cat.id }, cat.name)}>Rename</button>
-                        <button className="link-btn danger" onClick={() => del('category', cat.id, `Delete category "${cat.name}" and everything under it?`)}>Delete</button>
+                        <button className="link-btn" onClick={() => { setEdit({ kind: 'category', id: cat.id }); setEditName(cat.name); }}>Rename</button>
+                        <button className="link-btn danger" onClick={() => delNode('category', cat.id, `Delete category "${cat.name}" and everything under it?`)}>Delete</button>
                       </div>
                     </>
                   )}
-                </div>
+                </header>
 
-                {directComps.map((c) => competencyRow(c))}
-                {addCompetencyRow(cat.id, null)}
+                <div className="comp-cat-body">
+                  {competencyGrid(directComps, cat.id, null)}
 
-                {catSubs.map((sub) => {
-                  const subComps = compsBySub[sub.id] ?? [];
-                  const subEditing = edit?.kind === 'subcategory' && edit.id === sub.id;
-                  return (
-                    <div className="comp-sub" key={sub.id}>
-                      <div className="comp-sub-head">
-                        {subEditing ? (
-                          <div className="comp-row editing" style={{ flex: 1 }}>
-                            <input className="field" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                            <div className="tree-actions">
-                              <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={!editName.trim()}>Save</button>
-                              <button className="btn btn-sm btn-ghost" onClick={() => setEdit(null)}>Cancel</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="comp-sub-name">{sub.name}</span>
-                            <div className="tree-actions">
-                              <button className="link-btn" onClick={() => startEdit({ kind: 'subcategory', id: sub.id }, sub.name)}>Rename</button>
-                              <button className="link-btn danger" onClick={() => del('subcategory', sub.id, `Delete subcategory "${sub.name}"? Its competencies stay under the category.`)}>Delete</button>
-                            </div>
-                          </>
-                        )}
+                  {catSubs.map((sub) => {
+                    const subComps = compsBySub[sub.id] ?? [];
+                    const subEditing = edit?.kind === 'subcategory' && edit.id === sub.id;
+                    return (
+                      <div className="comp-sub" key={sub.id}>
+                        <div className="comp-sub-head">
+                          {subEditing ? renameRow : (
+                            <>
+                              <span className="comp-sub-name"><span className="sub-tag">Subcategory</span>{sub.name}</span>
+                              <div className="tree-actions">
+                                <button className="link-btn" onClick={() => { setEdit({ kind: 'subcategory', id: sub.id }); setEditName(sub.name); }}>Rename</button>
+                                <button className="link-btn danger" onClick={() => delNode('subcategory', sub.id, `Delete subcategory "${sub.name}"? Its competencies stay under the category.`)}>Delete</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        {competencyGrid(subComps, cat.id, sub.id)}
                       </div>
-                      {subComps.map((c) => competencyRow(c))}
-                      {addCompetencyRow(cat.id, sub.id)}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
 
-                {adder === `sub:${cat.id}` ? (
-                  <div className="comp-row editing">
-                    <input className="field" value={adderText} onChange={(e) => setAdderText(e.target.value)} placeholder="Subcategory name" />
-                    <div className="tree-actions">
-                      <button className="btn btn-sm btn-primary" onClick={() => addSubcategory(cat.id)} disabled={!adderText.trim()}>Add</button>
-                      <button className="btn btn-sm btn-ghost" onClick={resetAdder}>Cancel</button>
+                  {addingSubFor === cat.id ? (
+                    <div className="rename-row sub-add">
+                      <input className="field" value={subText} onChange={(e) => setSubText(e.target.value)} placeholder="Subcategory name" autoFocus />
+                      <button className="btn btn-sm btn-primary" onClick={() => addSubcategory(cat.id)} disabled={!subText.trim()}>Add</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => { setAddingSubFor(null); setSubText(''); }}>Cancel</button>
                     </div>
-                  </div>
-                ) : (
-                  <button className="link-btn add sub" onClick={() => { resetAdder(); setAdder(`sub:${cat.id}`); }}>+ Add subcategory</button>
-                )}
-              </div>
+                  ) : (
+                    <button className="link-btn add sub" onClick={() => { setAddingSubFor(cat.id); setSubText(''); }}>+ Add subcategory</button>
+                  )}
+                </div>
+              </section>
             );
           })}
 
@@ -283,6 +246,37 @@ export default function Competencies() {
             </div>
           </div>
         </>
+      )}
+
+      {modal && (
+        <div className="modal-overlay" onClick={() => setModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{modal.mode === 'view' ? modal.comp.name : modal.mode === 'edit' ? 'Edit competency' : 'Add competency'}</h2>
+              <button className="modal-close" onClick={() => setModal(null)} aria-label="Close">×</button>
+            </div>
+
+            {modal.mode === 'view' ? (
+              <div className="modal-body">
+                <p className="comp-modal-desc">{modal.comp.description || 'No description.'}</p>
+                <div className="modal-actions">
+                  <button className="btn btn-sm" onClick={() => startEditComp(modal.comp)}>Edit</button>
+                  <button className="link-btn danger" onClick={() => deleteComp(modal.comp)}>Delete</button>
+                </div>
+              </div>
+            ) : (
+              <div className="modal-step">
+                <label>Name</label>
+                <input className="field" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="Competency name" autoFocus />
+                <label>Description</label>
+                <textarea className="field" rows={3} value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="What this competency covers" />
+                <button className="btn btn-primary btn-block" onClick={saveComp} disabled={!mName.trim() || !mDesc.trim()}>
+                  {modal.mode === 'new' ? 'Add competency' : 'Save changes'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

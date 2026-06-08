@@ -894,3 +894,70 @@ button {
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 10px;
 }
 .add-category .field { margin-bottom: 0; }
+
+/* ---- Competency taxonomy: card redesign (overrides earlier rules) ---- */
+.comp-cat {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brand-cyan);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.comp-cat-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 22px;
+  background: rgba(255,255,255,0.025);
+  border-bottom: 1px solid var(--border);
+}
+.comp-cat-head h2 { margin: 0; font-size: 18px; }
+.comp-cat-body { padding: 18px 22px 22px; }
+
+.comp-sub {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+.comp-sub-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.comp-sub-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: var(--text); }
+.sub-tag {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--brand-gold); background: rgba(215,178,62,0.14);
+  padding: 3px 7px; border-radius: 5px;
+}
+
+.comp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.comp-card {
+  display: flex; align-items: center; text-align: left;
+  min-height: 60px; padding: 14px 16px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text); font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, transform .1s, background .15s;
+}
+.comp-card:hover { border-color: var(--accent); transform: translateY(-1px); background: #31404f; }
+.comp-card.comp-add {
+  flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: transparent; border: 1px dashed var(--slate);
+  color: var(--text-muted); font-weight: 500; font-size: 13px;
+}
+.comp-card.comp-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); transform: none; }
+.comp-card.comp-add .plus { font-size: 22px; line-height: 1; color: var(--accent); }
+
+.rename-row { display: flex; gap: 8px; align-items: center; flex: 1; }
+.rename-row .field { flex: 1; margin-bottom: 0; }
+.rename-row.sub-add { margin-top: 14px; }
+
+textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-body); }
+.modal-body { margin-top: 12px; }
+.comp-modal-desc { color: var(--text-muted); font-size: 14px; line-height: 1.55; margin: 0 0 20px; }
+.modal-actions { display: flex; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
