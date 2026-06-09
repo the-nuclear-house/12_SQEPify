@@ -7,6 +7,19 @@ export interface AppUser {
   product_role: ProductRole;
   consultant_id: string | null;
   is_active: boolean;
+  is_trainer?: boolean;
+}
+
+export interface DeliveryAssignment {
+  plan_item_id: string;
+  training_id: string;
+  start_month: number;
+  status: string;
+  consultant_id: string;
+  consultant_name: string;
+  td_full_name: string | null;
+  td_email: string | null;
+  pending_month: number | null;
 }
 
 export interface Consultant {
@@ -43,7 +56,7 @@ export interface PlannedTraining {
   toLevel: number;
   startMonth: number; // months from plan start
   durationMonths: number;
-  status: 'done' | 'in_progress' | 'upcoming';
+  status: 'done' | 'in_progress' | 'upcoming' | 'missing';
 }
 
 export interface ConsultantProfileData {
@@ -149,14 +162,20 @@ export interface CompetencyLevelTraining {
 export interface PlanItem {
   id: string;
   assessment_id: string;
-  competency_id: string;
+  competency_id: string | null;
   training_id: string | null;
   title: string | null;
   from_level: number;
   to_level: number;
-  start_month: number;
+  start_month: number | null;
   duration_months: number;
-  status: 'planned' | 'training_done' | 'confirmed' | 'blocked';
+  kind: 'training' | 'missing';
+  status: 'planned' | 'delivered' | 'assessed' | 'blocked';
+  trainer_id: string | null;
+  delivered_at: string | null;
+  delivered_by: string | null;
+  assessed_at: string | null;
+  assessed_by: string | null;
   outcome_level: number | null;
   note: string | null;
   sort_order: number;

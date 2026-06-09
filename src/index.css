@@ -1801,3 +1801,53 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
   display: grid; place-items: center; justify-self: center;
 }
 .pe-add-occ:hover { color: var(--brand-cyan); border-color: var(--accent); }
+
+/* Plan diamonds: delivered (amber), missing (danger), trainer-assigned dot */
+.gantt2-diamond.in_progress { background: var(--brand-gold); border-color: var(--brand-gold); }
+.gantt2-diamond.missing { background: transparent; border: 2px dashed var(--danger); }
+.gantt2-diamond.assigned::after {
+  content: ''; position: absolute; right: -3px; top: -3px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--brand-cyan);
+}
+.pe-trainer-lbl { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.pe-trainer { min-width: 180px; }
+.pe-add-occ-spacer { width: 30px; }
+
+/* Trainer delivery schedule: people-icon cohorts */
+.td-gantt { margin-top: 6px; }
+.td-person {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  border: 2px solid var(--border); background: var(--surface-3); color: var(--text-muted); cursor: pointer;
+}
+.td-person:hover { border-color: var(--accent); }
+.td-person.planned { color: var(--brand-cyan); border-color: var(--accent); }
+.td-person.delivered { color: #0b0f16; background: var(--brand-gold); border-color: var(--brand-gold); }
+.td-person.assessed { color: #0b0f16; background: var(--brand-green); border-color: var(--brand-green); }
+.td-count {
+  position: absolute; bottom: -7px; right: -8px; font-size: 10px; font-weight: 700;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 0 4px; line-height: 1.5;
+}
+.cohort-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.cohort-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.cohort-name { font-weight: 600; font-size: 14px; }
+.cohort-td { font-size: 12px; }
+.cohort-confirm { display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; justify-content: flex-end; }
+.cohort-pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.cohort-pill.amber { color: var(--brand-gold); background: rgba(215,178,62,0.16); }
+.cohort-pill.green { color: var(--brand-green); background: rgba(132,195,65,0.16); }
+
+/* Reassessment modal */
+.reassess-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.reassess-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.reassess-name { font-size: 13px; font-weight: 600; }
+.reassess-note-lbl { display: block; font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+.reassess-note-lbl textarea { margin-top: 6px; }
+
+/* Move requests (TD side) + cohort move (trainer side) */
+.move-reqs { margin-bottom: 14px; }
+.move-req { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); margin-top: 8px; }
+.move-req-main { font-size: 14px; }
+.move-req-actions { display: flex; align-items: center; gap: 10px; }
+.cohort-actions { display: flex; align-items: center; gap: 10px; }
+.cohort-month { width: auto; padding: 4px 8px; }

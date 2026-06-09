@@ -191,3 +191,12 @@ is the intended jump, `start_month`/`duration_months` place it on the Gantt. `st
 planned → training_done → confirmed (a training is an enabler; the TD's confirmed re-assessment is
 what advances the level). `outcome_level` is the level the TD confirmed after the training; confirming
 writes that into assessment_scores.validated_level. RLS: staff read/write all; consultant read own.
+
+## plan_items v2 + plan_item_outcomes (delivery workflow)
+A plan_items row is now a scheduled training occurrence (a diamond): kind='training' with a
+training_id, start_month and an assigned trainer_id (one of the training's approved trainers), or
+kind='missing' (a "Training Missing" placeholder carrying competency_id + from/to level, no training).
+Status runs planned -> delivered (trainer confirmed) -> assessed (TD reassessed). delivered_at/by and
+assessed_at/by are the audit trail. plan_item_outcomes records, per delivery, the level the TD set for
+each addressed competency (the history shown in the diamond card); the comment sits on plan_items.note.
+RLS: staff all; the consultant reads their own; the assigned trainer can read their diamonds.

@@ -90,6 +90,7 @@ export default function AppShell() {
 
         <nav className="navpills">
           {myProfile && <Pill to={myProfile} label="My profile" />}
+          {isConsultant && user?.is_trainer && <Pill to="/" label="Deliveries" />}
           {overview.map((t) => (
             <Pill key={t.to} to={t.to} label={t.label} />
           ))}

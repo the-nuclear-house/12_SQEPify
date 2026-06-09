@@ -1,3 +1,102 @@
+## Delivery workflow — Step 6: trainer move requests
+
+A trainer can propose a different month from the cohort modal ("ask the TD to move to Mx"); the row then
+shows the pending request. The consultant's responsible TD sees a Move requests panel on the consultant
+page (training, current month -> requested month) and accepts or declines. Accepting moves the diamond
+for everyone. Backed by a plan_move_requests table and two security-definer RPCs (request_training_move,
+decide_training_move, the latter restricted to the consultant's TD or a superadmin); my_delivery_assignments
+now also returns any pending move month. SQL in delivery_workflow.sql.
+## Delivery workflow — Step 5: Training Missing flow
+
+A Training Missing diamond on the consultant page now opens a two-step modal for staff: it explains the
+gap ("no training takes this consultant from level X to Y on [competency]"), lets them create the
+training (title, hours, approved trainers), then asks whether to add it to that competency's learning
+path at the target level and into the plan. On yes, it writes the learning-path link and replaces the
+missing line in place with a real training occurrence (collapsing onto an existing occurrence if the
+same training is already scheduled). No new SQL.
+## Delivery workflow — Step 4: TD reassessment
+
+On the consultant page, an amber (delivered) diamond now opens a reassessment modal for staff:
+"Received {training} from {trainer}", listing the competencies that training addresses that are also
+required by the consultant's role, each with a prefilled star rating, plus a comment. Saving writes the
+new validated levels, records the per-competency outcome against the delivery (plan_item_outcomes),
+marks the diamond assessed (green) with assessed_by/at, and the SQEPimeter recomputes — levels move only
+where a star was raised, so a delivery can legitimately result in no change. A green diamond opens a
+read-only history (date, per-competency level, comment); the consultant can view their own. No new SQL.
+## Delivery workflow — Step 3: trainer dashboard
+
+A trainer (a TD, or a consultant on the Approved Trainers list) gets a delivery schedule on the
+dashboard: one lane per training they deliver, a people icon per month showing the cohort assigned
+to them (x2/x3 when several share a month). Clicking a cohort lists the consultants and each one's
+responsible TD; the trainer confirms delivery per consultant ("Do you confirm you delivered X to Y?"),
+which turns that occurrence amber. Consultant-trainers reach this via a new "Deliveries" nav pill and
+are no longer redirected straight to their profile. Two security-definer RPCs back it so RLS stays
+narrow: my_delivery_assignments() and mark_training_delivered(uuid). SQL in delivery_workflow.sql.
+## Delivery workflow — Step 1: plan_items v2 + plan_item_outcomes
+
+Schema foundation for the trainer-delivery workflow. A diamond becomes a training occurrence
+(training + month + assigned trainer), statuses planned -> delivered -> assessed, with audit fields,
+plus a child table recording the per-competency levels set at each reassessment (the diamond-card
+history). Trainers can read the diamonds assigned to them.
+
+**SQL (safe to re-run).**
+```sql
+alter table public.plan_items add column if not exists kind text not null default 'training';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname='plan_items_kind_chk') then
+    alter table public.plan_items add constraint plan_items_kind_chk check (kind in ('training','missing'));
+  end if;
+end $$;
+alter table public.plan_items add column if not exists trainer_id uuid references public.trainers(id) on delete set null;
+alter table public.plan_items add column if not exists delivered_at timestamptz;
+alter table public.plan_items add column if not exists delivered_by uuid references public.users(id);
+alter table public.plan_items add column if not exists assessed_at timestamptz;
+alter table public.plan_items add column if not exists assessed_by uuid references public.users(id);
+alter table public.plan_items alter column competency_id drop not null;
+alter table public.plan_items alter column start_month drop not null;
+update public.plan_items set status='delivered' where status='training_done';
+update public.plan_items set status='assessed' where status='confirmed';
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint where conrelid='public.plan_items'::regclass and contype='c'
+           and pg_get_constraintdef(oid) ilike '%status%' loop
+    execute format('alter table public.plan_items drop constraint %I', c.conname);
+  end loop;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname='plan_items_status_chk') then
+    alter table public.plan_items add constraint plan_items_status_chk check (status in ('planned','delivered','assessed','blocked'));
+  end if;
+end $$;
+create index if not exists plan_items_trainer on public.plan_items(trainer_id);
+
+create table if not exists public.plan_item_outcomes (
+  id uuid primary key default gen_random_uuid(),
+  plan_item_id uuid not null references public.plan_items(id) on delete cascade,
+  competency_id uuid not null references public.competencies(id) on delete cascade,
+  level int not null check (level between 0 and 5),
+  created_at timestamptz not null default now()
+);
+create index if not exists plan_item_outcomes_item on public.plan_item_outcomes(plan_item_id);
+alter table public.plan_item_outcomes enable row level security;
+drop policy if exists pio_staff_all on public.plan_item_outcomes;
+create policy pio_staff_all on public.plan_item_outcomes for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists pio_own_read on public.plan_item_outcomes;
+create policy pio_own_read on public.plan_item_outcomes for select using (
+  exists (select 1 from public.plan_items pi join public.assessments a on a.id = pi.assessment_id
+    join public.users u on u.consultant_id = a.consultant_id::text
+    where pi.id = plan_item_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+);
+
+drop policy if exists pi_trainer_read on public.plan_items;
+create policy pi_trainer_read on public.plan_items for select using (
+  exists (select 1 from public.trainers t join public.users u on u.id = t.user_id
+    where t.id = trainer_id and lower(u.email) = lower(auth.jwt() ->> 'email'))
+);
+```
+
+**Undo.** `drop table if exists public.plan_item_outcomes;` and drop the added plan_items columns/policy.
 ## Training plan + delivery loop (plan_items)
 
 **What and why.** The Plan step builds a training plan from the gap between each validated level

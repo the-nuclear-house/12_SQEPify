@@ -8,7 +8,7 @@ import FileDropzone from '../components/FileDropzone';
 import type {
   Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
   Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
-  CompetencyLevelTraining, CompetencyLevelPath, PlanItem, Training,
+  CompetencyLevelTraining, CompetencyLevelPath, PlanItem, Training, Trainer, TrainingDeliverer,
   CompetencyScore, PlannedTraining,
 } from '../lib/types';
 
@@ -210,8 +210,206 @@ function Radar({ comps, onAxisClick }: { comps: CompetencyScore[]; onAxisClick?:
   );
 }
 
+function MissingTrainingModal({ comp, fromLevel, toLevel, missingId, trainers, existing, onDone, onClose }: {
+  comp: { id: string; name: string };
+  fromLevel: number;
+  toLevel: number;
+  missingId: string;
+  trainers: Trainer[];
+  existing: PlanItem[];
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<'create' | 'confirm'>('create');
+  const [title, setTitle] = useState('');
+  const [hours, setHours] = useState('');
+  const [delivererIds, setDelivererIds] = useState<string[]>([]);
+  const [newId, setNewId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function createTraining() {
+    if (!title.trim()) return;
+    setBusy(true); setErr(null);
+    const { data, error } = await supabase.from('trainings')
+      .insert({ title: title.trim(), duration_hours: hours.trim() === '' ? null : Math.max(0, Math.round(Number(hours))), status: 'active', notes: null })
+      .select('id').single();
+    if (error) { setErr(error.message); setBusy(false); return; }
+    const id = (data as { id: string }).id;
+    if (delivererIds.length) await supabase.from('training_deliverers').insert(delivererIds.map((trainer_id) => ({ training_id: id, trainer_id })));
+    setNewId(id); setBusy(false); setStep('confirm');
+  }
+
+  async function addToPathAndPlan() {
+    if (!newId) return;
+    setBusy(true); setErr(null);
+    const { error: e1 } = await supabase.from('competency_level_trainings')
+      .upsert({ competency_id: comp.id, level: toLevel, training_id: newId }, { onConflict: 'competency_id,level,training_id' });
+    if (e1) { setErr(e1.message); setBusy(false); return; }
+    // Replace the missing line: collapse onto an existing occurrence if there is one, else convert in place.
+    const dup = existing.some((p) => p.kind === 'training' && p.training_id === newId);
+    if (dup) {
+      await supabase.from('plan_items').delete().eq('id', missingId);
+    } else {
+      const cur = existing.find((p) => p.id === missingId);
+      await supabase.from('plan_items').update({ training_id: newId, kind: 'training', competency_id: null, start_month: cur?.start_month ?? 0 }).eq('id', missingId);
+    }
+    setBusy(false); onDone();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>{step === 'create' ? 'Create training' : 'Add to path'}</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-step">
+          {err && <p className="sync-msg err">{err}</p>}
+          {step === 'create' ? (
+            <>
+              <p className="muted">No training takes this consultant from level {fromLevel} to {toLevel} on <strong>{comp.name}</strong>. Create one to fill the gap.</p>
+              <label>Title</label>
+              <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. ALARP principles workshop" />
+              <label>Duration (hours)</label>
+              <input className="field" value={hours} onChange={(e) => setHours(e.target.value)} inputMode="numeric" placeholder="Optional" />
+              {trainers.length > 0 && (
+                <>
+                  <label>Approved trainers</label>
+                  <div className="deliverer-box">
+                    {trainers.map((tr) => (
+                      <label key={tr.id} className="browse-row">
+                        <input type="checkbox" checked={delivererIds.includes(tr.id)} onChange={() => setDelivererIds((ids) => ids.includes(tr.id) ? ids.filter((x) => x !== tr.id) : [...ids, tr.id])} />
+                        <span className="browse-name">{tr.display_name}</span>
+                        <span className="browse-tag">{tr.kind === 'technical_director' ? 'TD' : tr.kind === 'consultant' ? 'Consultant' : 'External'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button className="btn btn-primary btn-block" onClick={createTraining} disabled={busy || !title.trim()}>{busy ? 'Creating…' : 'Create training'}</button>
+            </>
+          ) : (
+            <>
+              <p className="muted">Add <strong>{title}</strong> to the <strong>{comp.name}</strong> learning path (level {fromLevel} → {toLevel}) and into this plan? It replaces the Training Missing line.</p>
+              <button className="btn btn-primary btn-block" onClick={addToPathAndPlan} disabled={busy}>{busy ? 'Saving…' : 'Yes, add to path and plan'}</button>
+              <button className="link-btn" style={{ display: 'block', margin: '10px auto 0' }} onClick={onDone}>Not now</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------- Gantt ----------------
-function Gantt({ trainings, minMonths = 12 }: { trainings: PlannedTraining[]; minMonths?: number }) {
+function ReassessModal({ planItemId, trainingTitle, trainerName, comps, assessmentId, userId, onSaved, onClose }: {
+  planItemId: string;
+  trainingTitle: string;
+  trainerName: string | null;
+  comps: { id: string; name: string; current: number; required: number }[];
+  assessmentId: string;
+  userId: string | undefined;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [levels, setLevels] = useState<Record<string, number>>(() => Object.fromEntries(comps.map((c) => [c.id, c.current])));
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true); setErr(null);
+    if (comps.length) {
+      const scoreRows = comps.map((c) => ({ assessment_id: assessmentId, competency_id: c.id, validated_level: levels[c.id] ?? c.current }));
+      const { error: e1 } = await supabase.from('assessment_scores').upsert(scoreRows, { onConflict: 'assessment_id,competency_id' });
+      if (e1) { setErr(e1.message); setSaving(false); return; }
+      const outcomeRows = comps.map((c) => ({ plan_item_id: planItemId, competency_id: c.id, level: levels[c.id] ?? c.current }));
+      const { error: e2 } = await supabase.from('plan_item_outcomes').insert(outcomeRows);
+      if (e2) { setErr(e2.message); setSaving(false); return; }
+    }
+    const { error: e3 } = await supabase.from('plan_items').update({ status: 'assessed', note: note || null, assessed_by: userId ?? null, assessed_at: new Date().toISOString() }).eq('id', planItemId);
+    setSaving(false);
+    if (e3) { setErr(e3.message); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>Reassess after training</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-step">
+          <p className="muted">Received <strong>{trainingTitle}</strong>{trainerName ? <> from <strong>{trainerName}</strong></> : null}. Reassess the competencies it addresses. Levels can stay the same; the consultant only moves when you raise a star.</p>
+          {err && <p className="sync-msg err">{err}</p>}
+          {comps.length === 0 ? (
+            <p className="muted">This training doesn't address any competency required by this consultant's role. You can still record it as assessed.</p>
+          ) : (
+            <div className="reassess-list">
+              {comps.map((c) => (
+                <div className="reassess-row" key={c.id}>
+                  <div className="reassess-name">{c.name}<span className="muted"> · target {c.required}</span></div>
+                  <StarRating value={levels[c.id] ?? 0} onChange={(v) => setLevels((s) => ({ ...s, [c.id]: v }))} showLabel size="sm" />
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="reassess-note-lbl">Comment
+            <textarea className="field" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed, what to work on next…" />
+          </label>
+          <button className="btn btn-primary btn-block" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save reassessment'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryModal({ planItemId, trainingTitle, nameOf, onClose }: {
+  planItemId: string;
+  trainingTitle: string;
+  nameOf: (id: string) => string;
+  onClose: () => void;
+}) {
+  const [outcomes, setOutcomes] = useState<{ competency_id: string; level: number }[]>([]);
+  const [note, setNote] = useState<string | null>(null);
+  const [at, setAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    (async () => {
+      const [o, pi] = await Promise.all([
+        supabase.from('plan_item_outcomes').select('competency_id, level').eq('plan_item_id', planItemId),
+        supabase.from('plan_items').select('note, assessed_at').eq('id', planItemId).maybeSingle(),
+      ]);
+      setOutcomes((o.data as { competency_id: string; level: number }[]) ?? []);
+      setNote((pi.data as { note: string | null } | null)?.note ?? null);
+      setAt((pi.data as { assessed_at: string | null } | null)?.assessed_at ?? null);
+      setLoading(false);
+    })();
+  }, [planItemId]);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>{trainingTitle}</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-step">
+          {at && <p className="muted">Reassessed {new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.</p>}
+          {loading ? <p className="muted">Loading…</p> : (
+            <>
+              {outcomes.length > 0 && (
+                <div className="reassess-list">
+                  {outcomes.map((o) => (
+                    <div className="reassess-row" key={o.competency_id}>
+                      <div className="reassess-name">{nameOf(o.competency_id)}</div>
+                      <span className="cohort-pill green">Level {o.level}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {note ? <p className="lp-actions" style={{ marginTop: 12 }}>{note}</p> : <p className="muted" style={{ marginTop: 12 }}>No comment recorded.</p>}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Gantt({ trainings, minMonths = 12, canReassess, onReassess, onHistory, onMissing }: { trainings: PlannedTraining[]; minMonths?: number; canReassess?: boolean; onReassess?: (id: string) => void; onHistory?: (id: string) => void; onMissing?: (id: string) => void }) {
   const [sel, setSel] = useState<string | null>(null);
   const total = Math.max(minMonths, 6, ...trainings.map((t) => t.startMonth + t.durationMonths));
   const months = Array.from({ length: total }, (_, i) => i);
@@ -263,9 +461,12 @@ function Gantt({ trainings, minMonths = 12 }: { trainings: PlannedTraining[]; mi
         <div className="gantt2-detail">
           <div className="gantt2-detail-main">
             <div className="gantt2-detail-name">{selected.name}</div>
-            <div className="gantt2-detail-sub">{selected.competency} · level {selected.fromLevel} → {selected.toLevel} · month {selected.startMonth + 1}</div>
+            <div className="gantt2-detail-sub">{selected.competency} · month {selected.startMonth + 1}</div>
           </div>
           <span className={`stage-pill ${selected.status === 'done' ? 'st-done' : selected.status === 'in_progress' ? 'st-self' : 'st-setup'}`}>{statusLabel(selected.status)}</span>
+          {selected.status === 'in_progress' && canReassess && <button className="btn btn-sm btn-primary" onClick={() => onReassess?.(selected.id)}>Reassess</button>}
+          {selected.status === 'done' && <button className="btn btn-sm" onClick={() => onHistory?.(selected.id)}>View assessment</button>}
+          {selected.status === 'missing' && canReassess && <button className="btn btn-sm btn-primary" onClick={() => onMissing?.(selected.id)}>Create training &amp; assign</button>}
         </div>
       )}
     </div>
@@ -277,56 +478,42 @@ function EmptyViz({ title, hint }: { title: string; hint: string }) {
 }
 
 // ---------------- Page ----------------
-function AddLineModal({ applicable, trainings, total, onAdd, onClose }: {
-  applicable: { id: string; name: string; required: number }[];
+function AddLineModal({ trainings, total, onAdd, onClose }: {
   trainings: Training[];
   total: number;
-  onAdd: (item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) => void;
+  onAdd: (item: { training_id: string; start_month: number }) => void;
   onClose: () => void;
 }) {
-  const [cid, setCid] = useState(applicable[0]?.id ?? '');
-  const [tid, setTid] = useState('');
-  const [to, setTo] = useState(4);
+  const [tid, setTid] = useState(trainings[0]?.id ?? '');
   const [month, setMonth] = useState(0);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><h2>Add training line</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-head"><h2>Add training</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
         <div className="modal-step">
-          <label>Competency</label>
-          <select className="field" value={cid} onChange={(e) => setCid(e.target.value)}>
-            {applicable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
           <label>Training</label>
           <select className="field" value={tid} onChange={(e) => setTid(e.target.value)}>
-            <option value="">To be defined</option>
             {trainings.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-          </select>
-          <label>Takes them to level</label>
-          <select className="field" value={to} onChange={(e) => setTo(Number(e.target.value))}>
-            {[2, 3, 4, 5].map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
           <label>Start month</label>
           <select className="field" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
             {Array.from({ length: total }, (_, m) => <option key={m} value={m}>M{m + 1}</option>)}
           </select>
-          <button className="btn btn-primary btn-block" disabled={!cid}
-            onClick={() => onAdd({ competency_id: cid, training_id: tid || null, title: tid ? null : 'Training to be defined', from_level: to - 1, to_level: to, start_month: month })}>
-            Add line
-          </button>
+          <button className="btn btn-primary btn-block" disabled={!tid} onClick={() => onAdd({ training_id: tid, start_month: month })}>Add training</button>
         </div>
       </div>
     </div>
   );
 }
 
-function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, trainingById, initialItems, onClose }: {
+function PlanEditor({ assessmentId, horizon, comps, trainings, trainingById, trainers, deliverers, initialItems, onClose }: {
   assessmentId: string;
   horizon: number;
   comps: Competency[];
-  applicable: { id: string; name: string; required: number }[];
   trainings: Training[];
   trainingById: Record<string, Training>;
+  trainers: Trainer[];
+  deliverers: TrainingDeliverer[];
   initialItems: PlanItem[];
   onClose: () => void;
 }) {
@@ -336,16 +523,32 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const total = Math.max(horizon || 18, 12, ...draft.map((d) => d.start_month + 1));
-  const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
+  const total = Math.max(horizon || 18, 12, ...draft.filter((d) => d.start_month != null).map((d) => (d.start_month as number) + 1));
+  const compName = (cid: string | null) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
   const pos = (m: number) => ((m + 0.5) / total) * 100;
-  const label = (it: PlanItem) => (it.training_id ? trainingById[it.training_id]?.title : null) ?? it.title ?? 'Training';
+  const trainerOpts = (training_id: string | null) => {
+    if (!training_id) return [] as Trainer[];
+    const ids = new Set(deliverers.filter((d) => d.training_id === training_id).map((d) => d.trainer_id));
+    return trainers.filter((t) => ids.has(t.id));
+  };
 
-  const lanes = useMemo(() => {
-    const m = new Map<string, PlanItem[]>();
-    draft.forEach((d) => { const a = m.get(d.competency_id) ?? []; a.push(d); m.set(d.competency_id, a); });
-    return [...m.entries()].map(([cid, items]) => ({ cid, name: compName(cid), items: items.sort((a, b) => a.start_month - b.start_month) }));
-  }, [draft, comps]);
+  type Lane = { key: string; name: string; kind: 'training' | 'missing'; training_id: string | null; items: PlanItem[] };
+  const lanes = useMemo<Lane[]>(() => {
+    const tMap = new Map<string, PlanItem[]>();
+    const missing: PlanItem[] = [];
+    draft.forEach((d) => {
+      if (d.kind === 'missing') { missing.push(d); return; }
+      const k = d.training_id ?? `t-${d.id}`;
+      const a = tMap.get(k) ?? []; a.push(d); tMap.set(k, a);
+    });
+    const out: Lane[] = [];
+    [...tMap.entries()].forEach(([k, items]) => {
+      const t = items[0].training_id ? trainingById[items[0].training_id] : null;
+      out.push({ key: k, name: t?.title ?? 'Training', kind: 'training', training_id: items[0].training_id, items: items.sort((a, b) => (a.start_month ?? 0) - (b.start_month ?? 0)) });
+    });
+    missing.forEach((m) => out.push({ key: `m-${m.id}`, name: `Training Missing \u00b7 ${compName(m.competency_id)} (L${m.from_level}\u2192${m.to_level})`, kind: 'missing', training_id: null, items: [m] }));
+    return out;
+  }, [draft, comps, trainingById]);
 
   const dragRef = useRef<{ id: string; track: HTMLElement } | null>(null);
   function move(e: PointerEvent) {
@@ -361,17 +564,19 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   }
 
   function removeLine(id: string) { setDraft((d) => d.filter((x) => x.id !== id)); if (sel === id) setSel(null); }
+  function setTrainer(id: string, trainer_id: string | null) { setDraft((d) => d.map((x) => (x.id === id ? { ...x, trainer_id } : x))); }
   function addOccurrence(items: PlanItem[]) {
     const base = items[0];
-    const used = new Set(items.map((i) => i.start_month));
-    let m = Math.max(...items.map((i) => i.start_month)) + 1;
+    const used = new Set(items.map((i) => i.start_month ?? 0));
+    let m = Math.max(...items.map((i) => i.start_month ?? 0)) + 1;
     while (used.has(m) && m < total) m++;
     const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setDraft((d) => [...d, { ...base, id: nid, start_month: Math.min(total - 1, Math.max(0, m)), status: 'planned', outcome_level: null, sort_order: d.length }]);
+    setDraft((d) => [...d, { ...base, id: nid, start_month: Math.min(total - 1, Math.max(0, m)), status: 'planned', delivered_at: null, delivered_by: null, assessed_at: null, assessed_by: null, outcome_level: null, sort_order: d.length }]);
     setSel(nid);
   }
-  function addLine(item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) {
-    setDraft((d) => [...d, { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, assessment_id: assessmentId, duration_months: 1, status: 'planned', outcome_level: null, note: null, sort_order: d.length, created_at: '', ...item } as PlanItem]);
+  function addLine(item: { training_id: string; start_month: number }) {
+    const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setDraft((d) => [...d, { id: nid, assessment_id: assessmentId, competency_id: null, training_id: item.training_id, title: null, from_level: 0, to_level: 0, start_month: item.start_month, duration_months: 1, kind: 'training', status: 'planned', trainer_id: null, delivered_at: null, delivered_by: null, assessed_at: null, assessed_by: null, outcome_level: null, note: null, sort_order: d.length, created_at: '' } as PlanItem]);
     setAddOpen(false);
   }
 
@@ -380,11 +585,11 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
     const origIds = new Set(initialItems.map((i) => i.id));
     const keptIds = new Set(draft.filter((d) => !d.id.startsWith('new-')).map((d) => d.id));
     const toDelete = [...origIds].filter((id) => !keptIds.has(id));
-    const inserts = draft.filter((d) => d.id.startsWith('new-')).map((d, i) => ({ assessment_id: assessmentId, competency_id: d.competency_id, training_id: d.training_id, title: d.title, from_level: d.from_level, to_level: d.to_level, start_month: d.start_month, duration_months: 1, status: 'planned', sort_order: i }));
+    const inserts = draft.filter((d) => d.id.startsWith('new-')).map((d, i) => ({ assessment_id: assessmentId, kind: d.kind, competency_id: d.competency_id, training_id: d.training_id, from_level: d.from_level, to_level: d.to_level, start_month: d.start_month, duration_months: 1, status: 'planned', trainer_id: d.trainer_id, sort_order: i }));
     try {
       if (toDelete.length) { const { error } = await supabase.from('plan_items').delete().in('id', toDelete); if (error) throw error; }
       for (const u of draft.filter((d) => !d.id.startsWith('new-'))) {
-        const { error } = await supabase.from('plan_items').update({ start_month: u.start_month, training_id: u.training_id, title: u.title, from_level: u.from_level, to_level: u.to_level, sort_order: u.sort_order }).eq('id', u.id);
+        const { error } = await supabase.from('plan_items').update({ start_month: u.start_month, training_id: u.training_id, trainer_id: u.trainer_id, from_level: u.from_level, to_level: u.to_level, sort_order: u.sort_order }).eq('id', u.id);
         if (error) throw error;
       }
       if (inserts.length) { const { error } = await supabase.from('plan_items').insert(inserts); if (error) throw error; }
@@ -393,13 +598,14 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   }
 
   const selItem = draft.find((d) => d.id === sel) ?? null;
+  const selTrainerOpts = selItem ? trainerOpts(selItem.training_id) : [];
 
   return (
     <div className="plan-editor">
       <div className="plan-editor-bar">
         <div>
           <h2>Training plan</h2>
-          <span className="muted">Drag a diamond to reschedule it. Add or remove lines. Save when you're done.</span>
+          <span className="muted">One lane per training. Drag a diamond to reschedule, or use + to add another occurrence. Assign a trainer in the panel below.</span>
         </div>
         <div className="pe-actions">
           <button className="btn btn-sm" onClick={() => setAddOpen(true)}>+ Add training</button>
@@ -413,20 +619,28 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
         <div className="gantt2-scroll"><div className="gantt2-grid">
           <div className="gantt2-axis">{Array.from({ length: total }, (_, m) => <span key={m} className="gantt2-tick" style={{ left: `${pos(m)}%` }}>M{m + 1}</span>)}</div>
           {lanes.map((lane) => (
-            <div className="gantt2-lane" key={lane.cid}>
+            <div className="gantt2-lane" key={lane.key}>
               <div className="gantt2-lane-name" title={lane.name}>{lane.name}</div>
               <div className="gantt2-track">
                 <span className="gantt2-baseline" />
-                {lane.items.map((it) => (
+                {lane.kind === 'missing' ? (
+                  <button
+                    className={`gantt2-diamond missing${sel === lane.items[0].id ? ' sel' : ''}`}
+                    style={{ left: `${pos(0)}%` }}
+                    title="No training assigned for this step"
+                    onClick={() => setSel(lane.items[0].id)} />
+                ) : lane.items.map((it) => (
                   <button key={it.id}
-                    className={`gantt2-diamond draggable ${it.status === 'confirmed' ? 'done' : it.status === 'training_done' ? 'in_progress' : ''}${sel === it.id ? ' sel' : ''}`}
-                    style={{ left: `${pos(it.start_month)}%` }}
-                    title={`${label(it)} · M${it.start_month + 1}`}
+                    className={`gantt2-diamond draggable ${it.status === 'assessed' ? 'done' : it.status === 'delivered' ? 'in_progress' : ''}${it.trainer_id ? ' assigned' : ''}${sel === it.id ? ' sel' : ''}`}
+                    style={{ left: `${pos(it.start_month ?? 0)}%` }}
+                    title={`${lane.name} \u00b7 M${(it.start_month ?? 0) + 1}${it.trainer_id ? ' \u00b7 trainer assigned' : ' \u00b7 no trainer'}`}
                     onPointerDown={(e) => down(e, it.id)}
                     onClick={() => { setSel(it.id); }} />
                 ))}
               </div>
-              <button className="pe-add-occ" title="Add another occurrence of this training" onClick={() => addOccurrence(lane.items)}>+</button>
+              {lane.kind === 'training'
+                ? <button className="pe-add-occ" title="Add another occurrence of this training" onClick={() => addOccurrence(lane.items)}>+</button>
+                : <span className="pe-add-occ-spacer" />}
             </div>
           ))}
           {lanes.length === 0 && <p className="muted" style={{ padding: 12 }}>No lines yet. Add a training to start.</p>}
@@ -435,17 +649,38 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
 
       {selItem && (
         <div className="pe-detail">
-          <div className="pe-detail-main">
-            <div className="pe-detail-name">{label(selItem)}</div>
-            <div className="muted">{compName(selItem.competency_id)} · level {selItem.from_level} → {selItem.to_level} · month {selItem.start_month + 1}</div>
-          </div>
-          <div className="pe-detail-actions">
-            <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
-          </div>
+          {selItem.kind === 'missing' ? (
+            <>
+              <div className="pe-detail-main">
+                <div className="pe-detail-name">Training Missing</div>
+                <div className="muted">No training is defined to take {compName(selItem.competency_id)} from level {selItem.from_level} to {selItem.to_level}. Create one from the Training page, then add it here.</div>
+              </div>
+              <div className="pe-detail-actions">
+                <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="pe-detail-main">
+                <div className="pe-detail-name">{trainingById[selItem.training_id ?? '']?.title ?? 'Training'}</div>
+                <div className="muted">Month {(selItem.start_month ?? 0) + 1}</div>
+              </div>
+              <div className="pe-detail-actions">
+                <label className="pe-trainer-lbl">Trainer
+                  <select className="field pe-trainer" value={selItem.trainer_id ?? ''} onChange={(e) => setTrainer(selItem.id, e.target.value || null)}>
+                    <option value="">Unassigned</option>
+                    {selTrainerOpts.map((t) => <option key={t.id} value={t.id}>{t.display_name}</option>)}
+                  </select>
+                </label>
+                {selTrainerOpts.length === 0 && <span className="muted">No approved trainers for this training yet.</span>}
+                <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {addOpen && <AddLineModal applicable={applicable} trainings={trainings} total={total} onAdd={addLine} onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddLineModal trainings={trainings} total={total} onAdd={addLine} onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
@@ -466,6 +701,8 @@ export default function ConsultantProfile() {
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [clts, setClts] = useState<CompetencyLevelTraining[]>([]);
   const [trainings, setTrainingsList] = useState<Training[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [deliverers, setDeliverers] = useState<TrainingDeliverer[]>([]);
   const [planning, setPlanning] = useState(false);
   const [building, setBuilding] = useState(false);
   const [planDone, setPlanDone] = useState(false);
@@ -473,6 +710,10 @@ export default function ConsultantProfile() {
   const [rolesEdit, setRolesEdit] = useState(false);
   const [editSel, setEditSel] = useState<string[]>([]);
   const [pathComp, setPathComp] = useState<{ id: string; competency: string; current: number; target: number } | null>(null);
+  const [reassessId, setReassessId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [missingId, setMissingId] = useState<string | null>(null);
+  const [moveReqs, setMoveReqs] = useState<{ id: string; plan_item_id: string; requested_month: number }[]>([]);
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
@@ -490,7 +731,7 @@ export default function ConsultantProfile() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [c, r, a, k, rc, cat, sub, clt, tns] = await Promise.all([
+    const [c, r, a, k, rc, cat, sub, clt, tns, trn, del] = await Promise.all([
       supabase.from('consultants').select('*').eq('id', id).maybeSingle(),
       supabase.from('roles').select('*').order('is_base', { ascending: false }).order('sort_order').order('name'),
       supabase.from('assessments').select('*').eq('consultant_id', id).neq('status', 'cancelled')
@@ -501,8 +742,10 @@ export default function ConsultantProfile() {
       supabase.from('competency_subcategories').select('*'),
       supabase.from('competency_level_trainings').select('*'),
       supabase.from('trainings').select('*'),
+      supabase.from('trainers').select('*'),
+      supabase.from('training_deliverers').select('*'),
     ]);
-    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error || clt.error || tns.error;
+    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error || clt.error || tns.error || trn.error || del.error;
     if (err) { setError(err.message); setLoading(false); return; }
     setError(null);
     setConsultant((c.data as Consultant) ?? null);
@@ -513,6 +756,8 @@ export default function ConsultantProfile() {
     setSubs((sub.data as CompetencySubcategory[]) ?? []);
     setClts((clt.data as CompetencyLevelTraining[]) ?? []);
     setTrainingsList((tns.data as Training[]) ?? []);
+    setTrainers((trn.data as Trainer[]) ?? []);
+    setDeliverers((del.data as TrainingDeliverer[]) ?? []);
     const asmt = (a.data as Assessment) ?? null;
     setAssessment(asmt);
     if (asmt) {
@@ -591,17 +836,51 @@ export default function ConsultantProfile() {
   const rolesAdding = editSel.some((r) => !selected.includes(r));
 
   const trainingById = useMemo(() => Object.fromEntries(trainings.map((t) => [t.id, t])), [trainings]);
-  const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
-  const planForGantt: PlannedTraining[] = useMemo(() => planItems.map((p) => ({
-    id: p.id,
-    name: (p.training_id ? trainingById[p.training_id]?.title : null) ?? p.title ?? 'Training',
-    competency: compName(p.competency_id),
-    fromLevel: p.from_level,
-    toLevel: p.to_level,
-    startMonth: p.start_month,
-    durationMonths: p.duration_months,
-    status: p.status === 'confirmed' ? 'done' : p.status === 'training_done' ? 'in_progress' : 'upcoming',
-  })), [planItems, trainingById, comps]);
+  const compName = (cid: string | null) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
+  const planForGantt: PlannedTraining[] = useMemo(() => planItems.map((p) => {
+    const isMissing = p.kind === 'missing';
+    const trainingTitle = p.training_id ? trainingById[p.training_id]?.title : null;
+    const lane = isMissing
+      ? `Training Missing · ${compName(p.competency_id)} (L${p.from_level}\u2192${p.to_level})`
+      : (trainingTitle ?? p.title ?? 'Training');
+    return {
+      id: p.id,
+      name: isMissing ? 'Training Missing' : (trainingTitle ?? 'Training'),
+      competency: lane,
+      fromLevel: p.from_level,
+      toLevel: p.to_level,
+      startMonth: p.start_month ?? 0,
+      durationMonths: p.duration_months,
+      status: isMissing ? 'missing' : p.status === 'assessed' ? 'done' : p.status === 'delivered' ? 'in_progress' : 'upcoming',
+    } as PlannedTraining;
+  }), [planItems, trainingById, comps]);
+
+  const reassessData = useMemo(() => {
+    if (!reassessId) return null;
+    const pi = planItems.find((p) => p.id === reassessId);
+    if (!pi || !pi.training_id) return null;
+    const addressed = new Set(clts.filter((x) => x.training_id === pi.training_id).map((x) => x.competency_id));
+    const cs = applicable.filter((c) => addressed.has(c.id)).map((c) => {
+      const sc = scoreByComp[c.id];
+      return { id: c.id, name: c.name, current: sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0, required: c.required };
+    });
+    const trainerName = trainers.find((t) => t.id === pi.trainer_id)?.display_name ?? null;
+    const trainingTitle = (pi.training_id ? trainingById[pi.training_id]?.title : null) ?? 'Training';
+    return { pi, comps: cs, trainerName, trainingTitle };
+  }, [reassessId, planItems, clts, applicable, scoreByComp, trainers, trainingById]);
+
+  const historyTitle = useMemo(() => {
+    if (!historyId) return '';
+    const pi = planItems.find((p) => p.id === historyId);
+    return (pi?.training_id ? trainingById[pi.training_id]?.title : null) ?? 'Training';
+  }, [historyId, planItems, trainingById]);
+
+  const missingInfo = useMemo(() => {
+    if (!missingId) return null;
+    const pi = planItems.find((p) => p.id === missingId);
+    if (!pi || !pi.competency_id) return null;
+    return { comp: { id: pi.competency_id, name: compName(pi.competency_id) }, fromLevel: pi.from_level, toLevel: pi.to_level };
+  }, [missingId, planItems]);
 
   const progress = useMemo(() => {
     if (liveComps.length === 0) return 0;
@@ -648,6 +927,21 @@ export default function ConsultantProfile() {
   const isSelf = user?.product_role === 'consultant' && !!user?.consultant_id && String(user.consultant_id) === String(id);
   const isStaff = user?.product_role === 'superadmin' || user?.product_role === 'technical_director';
   const needsSelf = isSelf && assessment?.status === 'self_assessment';
+
+  useEffect(() => {
+    if (!isStaff || planItems.length === 0) { setMoveReqs([]); return; }
+    (async () => {
+      const ids = planItems.map((p) => p.id);
+      const { data } = await supabase.from('plan_move_requests').select('id, plan_item_id, requested_month').in('plan_item_id', ids).eq('status', 'pending');
+      setMoveReqs((data as { id: string; plan_item_id: string; requested_month: number }[]) ?? []);
+    })();
+  }, [planItems, isStaff]);
+
+  async function decideMove(reqId: string, accept: boolean) {
+    const { error } = await supabase.rpc('decide_training_move', { p_request_id: reqId, p_accept: accept });
+    if (error) { setError(error.message); return; }
+    load();
+  }
   const autoRef = useRef(false);
   useEffect(() => {
     if (!loading && needsSelf && !autoRef.current) { autoRef.current = true; setModalStep(1); }
@@ -696,25 +990,27 @@ export default function ConsultantProfile() {
     if (!assessment) return;
     setPlanning(true); setBuilding(true); setPlanDone(false); setError(null);
     const started = Date.now();
-    const rows: Array<Record<string, unknown>> = [];
-    let order = 0;
+    const horizon = assessment.horizon_months ?? 18;
+    // A diamond is a training occurrence, so collapse all gaps to the distinct trainings needed.
+    const needed = new Set<string>();
+    const missing: Array<{ competency_id: string; level: number }> = [];
     applicable.forEach((c) => {
       const sc = scoreByComp[c.id];
       const cur = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0;
-      let cursor = 0;
       for (let L = Math.max(cur + 1, 2); L <= c.required; L++) {
         const trs = clts.filter((x) => x.competency_id === c.id && x.level === L);
-        const push = (training_id: string | null, title: string | null, dm: number) => {
-          rows.push({ assessment_id: assessment.id, competency_id: c.id, training_id, title, from_level: L - 1, to_level: L, start_month: cursor, duration_months: dm, status: 'planned', sort_order: order++ });
-          cursor += dm + 1;
-        };
-        if (trs.length === 0) push(null, `Training needed to reach level ${L}`, 1);
-        else trs.forEach((t) => {
-          const tr = trainingById[t.training_id];
-          const dm = Math.max(1, Math.min(4, Math.round((tr?.duration_hours || 40) / 40)));
-          push(t.training_id, tr?.title ?? 'Training', dm);
-        });
+        if (trs.length === 0) missing.push({ competency_id: c.id, level: L });
+        else trs.forEach((t) => needed.add(t.training_id));
       }
+    });
+    const rows: Array<Record<string, unknown>> = [];
+    let order = 0; let month = 0;
+    [...needed].forEach((tid) => {
+      rows.push({ assessment_id: assessment.id, kind: 'training', training_id: tid, competency_id: null, from_level: 0, to_level: 0, start_month: Math.min(month, horizon - 1), duration_months: 1, status: 'planned', sort_order: order++ });
+      month += 1;
+    });
+    missing.forEach((m) => {
+      rows.push({ assessment_id: assessment.id, kind: 'missing', training_id: null, competency_id: m.competency_id, from_level: m.level - 1, to_level: m.level, start_month: null, duration_months: 1, status: 'planned', sort_order: order++ });
     });
     await supabase.from('plan_items').delete().eq('assessment_id', assessment.id);
     if (rows.length) { const { error } = await supabase.from('plan_items').insert(rows); if (error) setError(error.message); }
@@ -896,12 +1192,30 @@ export default function ConsultantProfile() {
       </div>
 
       <div className="profile-plan">
+        {isStaff && moveReqs.length > 0 && (
+          <div className="card move-reqs">
+            <h2 className="panel-title">Move requests</h2>
+            {moveReqs.map((r) => {
+              const pi = planItems.find((p) => p.id === r.plan_item_id);
+              const tname = (pi?.training_id ? trainingById[pi.training_id]?.title : null) ?? 'Training';
+              return (
+                <div className="move-req" key={r.id}>
+                  <div className="move-req-main"><strong>{tname}</strong> <span className="muted">M{(pi?.start_month ?? 0) + 1} → M{r.requested_month + 1}</span></div>
+                  <div className="move-req-actions">
+                    <button className="btn btn-sm btn-primary" onClick={() => decideMove(r.id, true)}>Accept</button>
+                    <button className="link-btn" onClick={() => decideMove(r.id, false)}>Decline</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         <div className="card gantt-card">
           <div className="gantt-head">
             <h2>Training plan</h2>
             {isStaff && planForGantt.length > 0 && <button className="btn btn-sm" onClick={() => setEditorOpen(true)}>Edit</button>}
           </div>
-          {planForGantt.length ? <Gantt trainings={planForGantt} minMonths={assessment?.horizon_months ?? 18} /> : (
+          {planForGantt.length ? <Gantt trainings={planForGantt} minMonths={assessment?.horizon_months ?? 18} canReassess={isStaff} onReassess={(id) => setReassessId(id)} onHistory={(id) => setHistoryId(id)} onMissing={(id) => setMissingId(id)} /> : (
             <EmptyViz title="No plan yet" hint="The plan is generated at the Plan step once levels are validated." />
           )}
         </div>
@@ -1171,6 +1485,36 @@ export default function ConsultantProfile() {
         </div>
       )}
 
+      {reassessData && assessment && (
+        <ReassessModal
+          planItemId={reassessData.pi.id}
+          trainingTitle={reassessData.trainingTitle}
+          trainerName={reassessData.trainerName}
+          comps={reassessData.comps}
+          assessmentId={assessment.id}
+          userId={user?.id}
+          onSaved={() => { setReassessId(null); load(); }}
+          onClose={() => setReassessId(null)}
+        />
+      )}
+
+      {historyId && (
+        <HistoryModal planItemId={historyId} trainingTitle={historyTitle} nameOf={compName} onClose={() => setHistoryId(null)} />
+      )}
+
+      {missingInfo && (
+        <MissingTrainingModal
+          comp={missingInfo.comp}
+          fromLevel={missingInfo.fromLevel}
+          toLevel={missingInfo.toLevel}
+          missingId={missingId!}
+          trainers={trainers}
+          existing={planItems}
+          onDone={() => { setMissingId(null); load(); }}
+          onClose={() => setMissingId(null)}
+        />
+      )}
+
       {pathComp && (
         <LearningPathModal
           comp={pathComp}
@@ -1212,9 +1556,10 @@ export default function ConsultantProfile() {
           assessmentId={assessment.id}
           horizon={assessment.horizon_months ?? 18}
           comps={comps}
-          applicable={applicable}
           trainings={trainings}
           trainingById={trainingById}
+          trainers={trainers}
+          deliverers={deliverers}
           initialItems={planItems}
           onClose={() => { setEditorOpen(false); load(); }}
         />

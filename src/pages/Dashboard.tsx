@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
-import type { Consultant, Assessment, Trainer, Training, TrainingDeliverer } from '../lib/types';
+import TrainerDeliveries from '../components/TrainerDeliveries';
+import type { Consultant, Assessment } from '../lib/types';
 
 type Stage = 'setup' | 'self' | 'validate' | 'plan' | 'done';
 
@@ -31,32 +32,24 @@ export default function Dashboard() {
 
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [asmts, setAsmts] = useState<Assessment[]>([]);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [dels, setDels] = useState<TrainingDeliverer[]>([]);
-  const [trainings, setTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Stage | 'all'>('all');
 
   const isStaff = role === 'superadmin' || role === 'technical_director';
+  const isTrainer = !!user?.is_trainer;
 
   useEffect(() => {
     if (!isStaff) return;
     (async () => {
-      const [c, a, tr, d, t] = await Promise.all([
+      const [c, a] = await Promise.all([
         supabase.from('consultants').select('*').eq('is_active', true).order('full_name'),
         supabase.from('assessments').select('*').neq('status', 'cancelled').order('created_at', { ascending: false }),
-        supabase.from('trainers').select('*'),
-        supabase.from('training_deliverers').select('*'),
-        supabase.from('trainings').select('*').order('title'),
       ]);
-      const err = c.error || a.error || tr.error || d.error || t.error;
+      const err = c.error || a.error;
       if (err) { setError(err.message); setLoading(false); return; }
       setConsultants((c.data as Consultant[]) ?? []);
       setAsmts((a.data as Assessment[]) ?? []);
-      setTrainers((tr.data as Trainer[]) ?? []);
-      setDels((d.data as TrainingDeliverer[]) ?? []);
-      setTrainings((t.data as Training[]) ?? []);
       setLoading(false);
     })();
   }, [isStaff]);
@@ -85,16 +78,17 @@ export default function Dashboard() {
     return k;
   }, [rows]);
 
-  const myTrainings = useMemo(() => {
-    const myTrainerIds = new Set(trainers.filter((t) => t.user_id && t.user_id === user?.id).map((t) => t.id));
-    if (myTrainerIds.size === 0) return [];
-    const ids = new Set(dels.filter((d) => myTrainerIds.has(d.trainer_id)).map((d) => d.training_id));
-    return trainings.filter((t) => ids.has(t.id));
-  }, [trainers, dels, trainings, user]);
-
   const shown = filter === 'all' ? rows : rows.filter((r) => r.stage === filter);
 
   if (!isStaff) {
+    if (isTrainer) {
+      return (
+        <div>
+          <div className="page-head"><h1>Deliveries</h1></div>
+          <TrainerDeliveries />
+        </div>
+      );
+    }
     return user?.consultant_id
       ? <Navigate to={`/consultants/${user.consultant_id}`} replace />
       : <div className="card"><p className="muted" style={{ padding: 16 }}>Your consultant profile isn't linked yet. Ask an administrator to connect your account.</p></div>;
@@ -123,46 +117,26 @@ export default function Dashboard() {
             ))}
           </div>
 
-          <div className="dash-grid">
-            <div className="card">
-              <h2 className="panel-title">{filter === 'all' ? 'All consultants' : STAGE[filter].label}</h2>
-              {shown.length === 0 ? (
-                <p className="muted">{rows.length === 0 ? 'No consultants assigned to you yet.' : 'None at this stage.'}</p>
-              ) : (
-                <div className="dash-list">
-                  {shown.map(({ c, stage }) => (
-                    <Link className="dash-row" to={`/consultants/${c.id}`} key={c.id}>
-                      <div className="dash-row-main">
-                        <div className="dash-row-name">{c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</div>
-                        <div className="dash-row-sub">{c.job_title ?? 'Consultant'}</div>
-                      </div>
-                      <span className={`stage-pill ${STAGE[stage].cls}`}>{STAGE[stage].label}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="card">
-              <h2 className="panel-title">Trainings you deliver</h2>
-              {myTrainings.length === 0 ? (
-                <p className="muted">You're not set as a deliverer on any training yet. Assign yourself in the Trainings tab.</p>
-              ) : (
-                <div className="dash-list">
-                  {myTrainings.map((t) => (
-                    <div className="dash-row static" key={t.id}>
-                      <div className="dash-row-main">
-                        <div className="dash-row-name">{t.title}</div>
-                        <div className="dash-row-sub">{t.duration_hours != null ? `${t.duration_hours} hours` : 'Duration not set'}</div>
-                      </div>
-                      <span className={`status-pill ${t.status === 'required' ? 'req' : 'act'}`}>{t.status === 'required' ? 'Required' : 'Active'}</span>
+          <div className="card">
+            <h2 className="panel-title">{filter === 'all' ? 'All consultants' : STAGE[filter].label}</h2>
+            {shown.length === 0 ? (
+              <p className="muted">{rows.length === 0 ? 'No consultants assigned to you yet.' : 'None at this stage.'}</p>
+            ) : (
+              <div className="dash-list">
+                {shown.map(({ c, stage }) => (
+                  <Link className="dash-row" to={`/consultants/${c.id}`} key={c.id}>
+                    <div className="dash-row-main">
+                      <div className="dash-row-name">{c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email}</div>
+                      <div className="dash-row-sub">{c.job_title ?? 'Consultant'}</div>
                     </div>
-                  ))}
-                  <p className="muted card-hint">Assigning a training to everyone who needs it arrives with the planning step, once plans exist to read from.</p>
-                </div>
-              )}
-            </div>
+                    <span className={`stage-pill ${STAGE[stage].cls}`}>{STAGE[stage].label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
+
+          {isTrainer && <TrainerDeliveries />}
         </>
       )}
     </div>

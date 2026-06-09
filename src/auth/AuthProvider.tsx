@@ -34,7 +34,13 @@ async function fetchAppUser(email: string | undefined): Promise<AppUser | null> 
     console.error('Failed to load user record:', error.message);
     return null;
   }
-  return (data as AppUser) ?? null;
+  const appUser = (data as AppUser) ?? null;
+  if (appUser) {
+    // A user is a trainer if they're linked to a row on the Approved Trainers list.
+    const { data: tr } = await supabase.from('trainers').select('id').eq('user_id', appUser.id).eq('is_active', true).limit(1);
+    appUser.is_trainer = (tr?.length ?? 0) > 0;
+  }
+  return appUser;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
