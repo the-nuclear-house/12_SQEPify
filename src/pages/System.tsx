@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Card from '../components/Card';
 import UserManagement from '../components/UserManagement';
+import AiSettings from '../components/AiSettings';
 
 interface SyncResult {
   ok?: boolean;
@@ -115,6 +116,8 @@ export default function System() {
         )}
         {result?.error && <p className="sync-msg err">Sync failed: {result.error}</p>}
       </Card>
+
+      <AiSettings />
 
       <UserManagement />
     </div>
