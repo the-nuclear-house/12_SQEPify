@@ -362,6 +362,20 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   }
 
   function removeLine(id: string) { setDraft((d) => d.filter((x) => x.id !== id)); if (sel === id) setSel(null); }
+  function addOccurrence(items: PlanItem[]) {
+    const base = items[0];
+    const used = new Set(items.map((i) => i.start_month));
+    let m = Math.max(...items.map((i) => i.start_month)) + 1;
+    while (used.has(m) && m < total) m++;
+    const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setDraft((d) => [...d, { ...base, id: nid, start_month: Math.min(total - 1, Math.max(0, m)), status: 'planned', outcome_level: null, sort_order: d.length }]);
+    setSel(nid); setReLevel(null);
+  }
+  function duplicate(it: PlanItem) {
+    const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setDraft((d) => [...d, { ...it, id: nid, start_month: Math.min(total - 1, it.start_month + 1), status: 'planned', outcome_level: null, sort_order: d.length }]);
+    setSel(nid); setReLevel(null);
+  }
   function addLine(item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) {
     setDraft((d) => [...d, { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, assessment_id: assessmentId, duration_months: 1, status: 'planned', outcome_level: null, note: null, sort_order: d.length, created_at: '', ...item } as PlanItem]);
     setAddOpen(false);
@@ -430,6 +444,7 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
                     onClick={() => { setSel(it.id); setReLevel(null); }} />
                 ))}
               </div>
+              <button className="pe-add-occ" title="Add another occurrence of this training" onClick={() => addOccurrence(lane.items)}>+</button>
             </div>
           ))}
           {lanes.length === 0 && <p className="muted" style={{ padding: 12 }}>No lines yet. Add a training to start.</p>}
@@ -452,7 +467,8 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
                   <button className="btn btn-sm btn-primary" onClick={() => confirm(selItem, reLevel ?? selItem.to_level)}>Confirm</button>
                 </span>
               ) : <span className="plan-confirmed">✓ confirmed at level {selItem.outcome_level}</span>}
-            <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove line</button>
+            <button className="link-btn" onClick={() => duplicate(selItem)}>Duplicate</button>
+            <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
           </div>
         </div>
       )}

@@ -1791,3 +1791,13 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .lp-pill.out { color: var(--text-faint); background: var(--surface-2); }
 .lp-pill.add { color: var(--brand-cyan); background: rgba(0,174,239,0.16); cursor: pointer; }
 .lp-pill.add:hover { background: rgba(0,174,239,0.28); }
+
+/* Plan editor: per-lane add-occurrence button */
+.pe-gantt .gantt2-axis { margin-right: 30px; }
+.pe-gantt .gantt2-lane { grid-template-columns: 150px 1fr 30px; }
+.pe-add-occ {
+  width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface-3); color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1;
+  display: grid; place-items: center; justify-self: center;
+}
+.pe-add-occ:hover { color: var(--brand-cyan); border-color: var(--accent); }
