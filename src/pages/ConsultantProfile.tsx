@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import NuclearisationProcess from '../components/NuclearisationProcess';
 import StarRating from '../components/StarRating';
 import FileDropzone from '../components/FileDropzone';
+import ConfirmDialog from '../components/ConfirmDialog';
 import type {
   Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
   Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
@@ -725,6 +726,8 @@ export default function ConsultantProfile() {
   const [selfNotes, setSelfNotes] = useState<Record<string, string>>({});
   const [saIdx, setSaIdx] = useState(0);
   const [valScores, setValScores] = useState<Record<string, number>>({});
+  const [vaIdx, setVaIdx] = useState(0);
+  const [confirmSubmit, setConfirmSubmit] = useState<null | 'self' | 'validation'>(null);
   const [drillCat, setDrillCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -975,6 +978,7 @@ export default function ConsultantProfile() {
       const seed: Record<string, number> = {};
       applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0; });
       setValScores(seed);
+      setVaIdx(0);
     }
   }, [modalStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1412,7 +1416,7 @@ export default function ConsultantProfile() {
                       <div className="sa-wiz-foot">
                         <button className="link-btn" disabled={saIdx === 0} onClick={() => setSaIdx((i) => Math.max(0, i - 1))}>Back</button>
                         {last ? (
-                          <button className="btn btn-primary" disabled={!canNext || saving} onClick={submitSelf}>{saving ? 'Submitting…' : 'Submit self-assessment'}</button>
+                          <button className="btn btn-primary" disabled={!canNext || saving} onClick={() => setConfirmSubmit('self')}>{saving ? 'Submitting…' : 'Submit self-assessment'}</button>
                         ) : (
                           <button className="btn btn-primary" disabled={!canNext} onClick={() => setSaIdx((i) => i + 1)}>Next</button>
                         )}
@@ -1458,41 +1462,40 @@ export default function ConsultantProfile() {
               ) : applicable.length === 0 ? (
                 <p className="muted">No competencies in scope yet.</p>
               ) : (
-                <>
-                  <p className="muted">Set the validated level for each competency. This locks their current level and moves them into planning.</p>
-                  <div className="sa-list">
-                    {selfGroups.map((g) => (
-                      <div className="sa-group" key={g.name}>
-                        <div className="sa-cat">{g.name}</div>
-                        {g.items.map((c) => {
-                          const sc = scoreByComp[c.id];
-                          const sl = sc?.self_level ?? 0;
-                          return (
-                            <div className="sa-val-row" key={c.id}>
-                              <div className="sa-val-head">
-                                <span className="sa-rep-name">{c.name}</span>
-                                <span className="sa-ai">
-                                  {sc?.self_level != null ? `self ${sc.self_level}` : 'no self-assessment'}
-                                  {sc?.ai_level != null ? ` · AI ${sc.ai_level}` : ''}
-                                  {` · required ${c.required}`}
-                                </span>
-                              </div>
-                              {sl > 0 && <div className="sa-rep-line"><span className="muted">Expectation:</span> {expectation(c.id, sl)}</div>}
-                              <div className="sa-rep-line"><span className="muted">Reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
-                              <div className="sa-val-set">
-                                <span className="muted">Validated level</span>
-                                <StarRating value={valScores[c.id] ?? 0} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel size="sm" />
-                              </div>
-                            </div>
-                          );
-                        })}
+                (() => {
+                  const c = selfList[vaIdx];
+                  if (!c) return null;
+                  const sc = scoreByComp[c.id];
+                  const sl = sc?.self_level ?? 0;
+                  const vl = valScores[c.id] ?? 0;
+                  const last = vaIdx === selfList.length - 1;
+                  return (
+                    <div className="sa-wiz">
+                      <div className="sa-wiz-top">
+                        <span className="sa-wiz-prog">Competency {vaIdx + 1} of {selfList.length}</span>
+                        <span className="sa-wiz-cat">{c.category}</span>
                       </div>
-                    ))}
-                  </div>
-                  <button className="btn btn-primary btn-block" onClick={submitValidation} disabled={saving}>
-                    {saving ? 'Validating…' : 'Validate and move to planning'}
-                  </button>
-                </>
+                      <h3 className="sa-wiz-name">{c.name}</h3>
+                      {c.description && <p className="sa-wiz-desc">{c.description}</p>}
+                      <div className="sa-rep-line"><span className="muted">Consultant:</span> {sl > 0 ? `self-rated ${sl} · ${LEVEL_NAME[sl]}` : 'no self-assessment'}{sc?.ai_level != null ? ` · AI ${sc.ai_level}` : ''}{` · required ${c.required}`}</div>
+                      <div className="sa-rep-line"><span className="muted">Reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
+                      <div className="sa-val-set">
+                        <span className="muted">Validated level</span>
+                        <StarRating value={vl} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel size="md" />
+                      </div>
+                      {vl > 0 && <div className="sa-expect"><p>{expectation(c.id, vl)}</p></div>}
+                      {error && <p className="sync-msg err">{error}</p>}
+                      <div className="sa-wiz-foot">
+                        <button className="link-btn" disabled={vaIdx === 0} onClick={() => setVaIdx((i) => Math.max(0, i - 1))}>Back</button>
+                        {last ? (
+                          <button className="btn btn-primary" disabled={vl < 1 || saving} onClick={() => setConfirmSubmit('validation')}>{saving ? 'Validating…' : 'Submit validation'}</button>
+                        ) : (
+                          <button className="btn btn-primary" disabled={vl < 1} onClick={() => setVaIdx((i) => i + 1)}>Next</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -1629,6 +1632,15 @@ export default function ConsultantProfile() {
         <button className="self-nudge" onClick={() => setModalStep(1)}>
           <span className="self-nudge-dot" />Complete your self-assessment
         </button>
+      )}
+      {confirmSubmit && (
+        <ConfirmDialog
+          title={confirmSubmit === 'self' ? 'Submit self-assessment?' : 'Submit validation?'}
+          message="Once submitted this can't be changed."
+          confirmLabel="Submit"
+          onConfirm={() => { const what = confirmSubmit; setConfirmSubmit(null); if (what === 'self') submitSelf(); else submitValidation(); }}
+          onCancel={() => setConfirmSubmit(null)}
+        />
       )}
     </div>
   );
