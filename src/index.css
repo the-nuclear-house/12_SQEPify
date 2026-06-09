@@ -1856,3 +1856,13 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .persona-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
 .persona-btn { width: 100%; }
 .test-login-or { text-align: center; font-size: 12px; color: var(--text-faint); margin: 10px 0 6px; }
+
+/* Clean role picker (set-up): chips above, search box, overlay dropdown that doesn't reflow */
+.rolepick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.rolepick { position: relative; }
+.rolepick-input { width: 100%; }
+.rolepick-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  max-height: 220px; overflow-y: auto; padding: 4px; box-shadow: var(--shadow);
+}
