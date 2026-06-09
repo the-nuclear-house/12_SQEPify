@@ -21,6 +21,7 @@ export default function UserManagement() {
   const [name, setName] = useState('');
   const [role, setRole] = useState<'technical_director' | 'superadmin'>('technical_director');
   const [adding, setAdding] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
   async function load() {
@@ -36,7 +37,11 @@ export default function UserManagement() {
   }
   useEffect(() => { load(); }, []);
 
-  const backOffice = useMemo(() => users.filter((u) => u.product_role === 'superadmin' || u.product_role === 'technical_director'), [users]);
+  const backOffice = useMemo(
+    () => users.filter((u) => u.product_role === 'superadmin' || u.product_role === 'technical_director')
+      .sort((a, b) => Number(b.is_active) - Number(a.is_active)),
+    [users],
+  );
   const consultants = useMemo(
     () => users.filter((u) => u.product_role === 'consultant').sort((a, b) => Number(b.is_active) - Number(a.is_active)),
     [users],
@@ -47,44 +52,47 @@ export default function UserManagement() {
     if (!e) return;
     setAdding(true); setError(null); setMsg(null);
     const existing = users.find((u) => u.email.toLowerCase() === e);
+    let err;
     if (existing) {
-      const { error } = await supabase.from('users').update({ product_role: role, is_active: true, full_name: name.trim() || existing.full_name }).eq('id', existing.id);
-      if (error) setError(error.message);
-      else setMsg(`${e} updated to ${ROLE_LABEL[role]}.`);
+      err = (await supabase.from('users').update({ product_role: role, is_active: true, full_name: name.trim() || existing.full_name }).eq('id', existing.id)).error;
+      if (!err) setMsg(`${e} updated to ${ROLE_LABEL[role]}.`);
     } else {
-      const { error } = await supabase.from('users').insert({ email: e, full_name: name.trim() || null, product_role: role, is_active: true });
-      if (error) setError(error.message);
-      else setMsg(`${e} added as ${ROLE_LABEL[role]}. They sign in with Microsoft 365 using that email.`);
+      err = (await supabase.from('users').insert({ email: e, full_name: name.trim() || null, product_role: role, is_active: true })).error;
+      if (!err) setMsg(`${e} added as ${ROLE_LABEL[role]}. They sign in with Microsoft 365 using that email.`);
     }
-    setAdding(false); setEmail(''); setName(''); load();
+    setAdding(false);
+    if (err) { setError(err.message); return; }
+    setEmail(''); setName(''); setShowAdd(false); load();
   }
 
-  function removeUser(u: AppUser) {
+  function openAdd() { setEmail(''); setName(''); setRole('technical_director'); setError(null); setShowAdd(true); }
+
+  function deactivate(u: AppUser) {
     setConfirm({
-      title: 'Remove access',
-      message: `Remove ${u.full_name || u.email} from the back office? They lose access to SQEPify. This doesn't touch the Control Room.`,
-      onYes: () => supabase.from('users').delete().eq('id', u.id).then(({ error }) => { if (error) setError(error.message); setConfirm(null); load(); }),
+      title: 'Deactivate access',
+      message: `Deactivate ${u.full_name || u.email}? They keep their history but lose access to SQEPify from their next sign-in. You can reactivate them here at any time.`,
+      onYes: () => supabase.from('users').update({ is_active: false }).eq('id', u.id).then(({ error }) => { if (error) setError(error.message); setConfirm(null); setMsg(`${u.email} deactivated.`); load(); }),
     });
+  }
+
+  async function reactivate(u: AppUser) {
+    setError(null);
+    const { error } = await supabase.from('users').update({ is_active: true }).eq('id', u.id);
+    if (error) setError(error.message); else setMsg(`${u.email} reactivated.`);
+    load();
   }
 
   return (
     <>
       <div className="card">
-        <h2 className="panel-title">Back office</h2>
-        <p className="muted card-hint">Superadmins and Technical Directors who can sign in to manage consultants. Access is by Microsoft 365 email.</p>
-
-        {error && <p className="sync-msg err">{error}</p>}
-        {msg && <p className="sync-msg ok">{msg}</p>}
-
-        <div className="um-add">
-          <input className="field" type="email" placeholder="name@thenuclearhouse.co.uk" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="field" placeholder="Full name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-          <select className="field" value={role} onChange={(e) => setRole(e.target.value as 'technical_director' | 'superadmin')}>
-            <option value="technical_director">Technical Director</option>
-            <option value="superadmin">Superadmin</option>
-          </select>
-          <button className="btn btn-primary" onClick={addUser} disabled={adding || !email.trim()}>{adding ? 'Saving…' : 'Add'}</button>
+        <div className="um-head">
+          <h2 className="panel-title">Back office</h2>
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add user</button>
         </div>
+        <p className="muted card-hint">Superadmins and Technical Directors who can sign in to manage consultants. Access is by Microsoft 365 email. Removing access deactivates the account (it keeps history and can be reactivated); profiles are never deleted from here.</p>
+
+        {error && !showAdd && <p className="sync-msg err">{error}</p>}
+        {msg && <p className="sync-msg ok">{msg}</p>}
 
         {loading ? (
           <p className="muted">Loading…</p>
@@ -93,16 +101,19 @@ export default function UserManagement() {
         ) : (
           <div className="dash-list">
             {backOffice.map((u) => (
-              <div className="dash-row static" key={u.id}>
+              <div className={`dash-row static${u.is_active ? '' : ' is-inactive'}`} key={u.id}>
                 <div className="dash-row-main">
                   <div className="dash-row-name">{u.full_name || u.email}</div>
                   <div className="dash-row-sub">{u.email}</div>
                 </div>
                 <span className={`role-pill ${u.product_role}`}>{ROLE_LABEL[u.product_role]}</span>
+                <span className={`status-pill ${u.is_active ? 'act' : 'req'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
                 {user?.id === u.id ? (
                   <span className="muted um-you">you</span>
+                ) : u.is_active ? (
+                  <button className="link-btn danger" onClick={() => deactivate(u)}>Deactivate</button>
                 ) : (
-                  <button className="link-btn danger" onClick={() => removeUser(u)}>Remove</button>
+                  <button className="link-btn" onClick={() => reactivate(u)}>Reactivate</button>
                 )}
               </div>
             ))}
@@ -132,6 +143,28 @@ export default function UserManagement() {
         )}
         <p className="muted card-hint" style={{ marginTop: 10 }}>{consultants.filter((u) => u.is_active).length} active of {consultants.length}.</p>
       </div>
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={() => setShowAdd(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Add back-office user</h2><button className="modal-close" onClick={() => setShowAdd(false)} aria-label="Close">×</button></div>
+            <div className="modal-step">
+              <p className="muted">They sign in with Microsoft 365 using this email. If the email already belongs to someone (including a consultant), their role is updated instead of creating a duplicate.</p>
+              <label>Email</label>
+              <input className="field" type="email" autoFocus placeholder="name@thenuclearhouse.co.uk" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <label>Full name (optional)</label>
+              <input className="field" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+              <label>Role</label>
+              <select className="field" value={role} onChange={(e) => setRole(e.target.value as 'technical_director' | 'superadmin')}>
+                <option value="technical_director">Technical Director</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+              {error && <p className="sync-msg err">{error}</p>}
+              <button className="btn btn-primary btn-block" onClick={addUser} disabled={adding || !email.trim()}>{adding ? 'Saving…' : 'Add user'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirm && <ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={() => confirm.onYes()} onCancel={() => setConfirm(null)} />}
     </>
