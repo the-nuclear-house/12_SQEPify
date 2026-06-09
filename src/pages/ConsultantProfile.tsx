@@ -1044,9 +1044,11 @@ export default function ConsultantProfile() {
     const rows = applicable.map((c) => ({ assessment_id: assessment.id, competency_id: c.id, self_level: selfScores[c.id] ?? 0, self_note: (selfNotes[c.id] ?? '').trim() || null }));
     const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
     if (upErr) { setError(upErr.message); setSaving(false); return; }
-    const { error } = await supabase.from('assessments').update({ status: 'validation' }).eq('id', assessment.id);
-    if (error) setError(error.message);
-    setSaving(false); setModalStep(null); load();
+    const { data: upd, error } = await supabase.from('assessments').update({ status: 'validation' }).eq('id', assessment.id).select('id');
+    if (error) { setError(error.message); setSaving(false); return; }
+    if (!upd || upd.length === 0) { setError('Could not submit. You may not have permission to update this assessment.'); setSaving(false); return; }
+    setSaving(false);
+    await load(); // status is now validation, so the modal shows the report
   }
 
   function readFile(file: File): Promise<{ file_base64?: string; media_type?: string; text?: string }> {
@@ -1398,16 +1400,11 @@ export default function ConsultantProfile() {
                         <StarRating value={lvl} onChange={(v) => setSelfScores((s) => ({ ...s, [c.id]: v }))} showLabel size="md" />
                         {ai != null && <span className="sa-ai">AI suggested {ai}</span>}
                       </div>
-                      {lvl > 0 ? (
-                        <div className="sa-expect">
-                          <div className="sa-expect-lbl">Level {lvl} · {LEVEL_NAME[lvl]} — what that means here</div>
-                          <p>{expectation(c.id, lvl)}</p>
-                        </div>
-                      ) : (
-                        <p className="muted sa-expect-hint">Choose a level to see what it means for this competency.</p>
+                      {lvl > 0 && (
+                        <div className="sa-expect"><p>{expectation(c.id, lvl)}</p></div>
                       )}
                       <label className="sa-reason-lbl">Explain your assessment <span className="req">*</span>
-                        <textarea className="field" rows={3} value={note} placeholder="Why do you place yourself at this level? Give examples." onChange={(e) => setSelfNotes((s) => ({ ...s, [c.id]: e.target.value }))} />
+                        <textarea className="field" rows={3} value={note} placeholder="e.g. led two safety case reviews on operating plant" onChange={(e) => setSelfNotes((s) => ({ ...s, [c.id]: e.target.value }))} />
                       </label>
                       {error && <p className="sync-msg err">{error}</p>}
                       <div className="sa-wiz-foot">
@@ -1425,7 +1422,7 @@ export default function ConsultantProfile() {
                 <p className="muted">Waiting for the consultant to complete their self-assessment. You'll be able to validate once they submit it.</p>
               ) : (
                 <>
-                  <p className="muted">{(isSelf || user?.product_role === 'superadmin') ? 'Your submitted self-assessment.' : 'The consultant’s self-assessment: their level and reasoning against the library expectation for each competency.'}</p>
+                  <p className="muted">{(isSelf || user?.product_role === 'superadmin') ? 'Your submitted self-assessment.' : 'The consultant’s self-assessment.'}</p>
                   <div className="sa-report">
                     {selfList.map((c) => {
                       const sc = scoreByComp[c.id];
@@ -1460,7 +1457,7 @@ export default function ConsultantProfile() {
                 <p className="muted">No competencies in scope yet.</p>
               ) : (
                 <>
-                  <p className="muted">Review the consultant's self-assessment against the AI's read of the CV, adjust where needed, and set the validated level. This locks their current level for each competency and moves them into planning.</p>
+                  <p className="muted">Set the validated level for each competency. This locks their current level and moves them into planning.</p>
                   <div className="sa-list">
                     {selfGroups.map((g) => (
                       <div className="sa-group" key={g.name}>
@@ -1478,8 +1475,8 @@ export default function ConsultantProfile() {
                                   {` · required ${c.required}`}
                                 </span>
                               </div>
-                              {sl > 0 && <div className="sa-rep-line"><span className="muted">They rated {LEVEL_NAME[sl]} — expectation:</span> {expectation(c.id, sl)}</div>}
-                              <div className="sa-rep-line"><span className="muted">Their reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
+                              {sl > 0 && <div className="sa-rep-line"><span className="muted">Expectation:</span> {expectation(c.id, sl)}</div>}
+                              <div className="sa-rep-line"><span className="muted">Reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
                               <div className="sa-val-set">
                                 <span className="muted">Validated level</span>
                                 <StarRating value={valScores[c.id] ?? 0} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel size="sm" />
