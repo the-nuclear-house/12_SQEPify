@@ -1742,3 +1742,17 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .pe-detail { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
 .pe-detail-name { font-size: 14px; font-weight: 600; }
 .pe-detail-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Roles card + figure placeholder + SQEPified */
+.role-chip { display: inline-block; font-size: 12px; padding: 5px 12px; border-radius: 999px; background: var(--surface-3); color: var(--text-muted); border: 1px solid var(--border-soft); }
+.role-chip.locked { color: var(--brand-green); border-color: rgba(132,195,65,0.3); }
+.role-chip.toggle { cursor: pointer; }
+.role-chip.toggle.on { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+.role-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.fig-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 34px 16px; text-align: center; width: 100%; }
+.fig-placeholder p { max-width: 240px; margin: 0; }
+.fig-placeholder-atom { position: relative; width: 70px; height: 70px; opacity: 0.5; }
+.fig-placeholder-atom span { position: absolute; inset: 0; margin: auto; width: 66px; height: 26px; border: 2px solid var(--text-faint); border-radius: 50%; }
+.fig-placeholder-atom span:nth-child(2) { transform: rotate(60deg); }
+.fig-placeholder-atom span:nth-child(3) { transform: rotate(120deg); }
+.fig-sqepified { font-family: var(--font-display); font-weight: 700; color: var(--brand-green); font-size: 14px; margin-top: 4px; }

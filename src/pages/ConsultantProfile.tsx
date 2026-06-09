@@ -12,22 +12,16 @@ import type {
   CompetencyScore, PlannedTraining,
 } from '../lib/types';
 
-const STEPS = ['Set-up', 'Self-assessment', 'Validation', 'Plan', 'Nuclearised'];
+const STEPS = ['Set-up', 'Self-assessment', 'Validation', 'Plan'];
 const TARGET = 4;
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: 'Set-up in progress', self_assessment: 'With consultant for self-assessment',
-  validation: 'Awaiting your validation', planning: 'Generating plan',
-  plan_review: 'Plan in review', delivered: 'Nuclearised', cancelled: 'Cancelled',
-};
 
 function stepIndex(status: Assessment['status'] | null): number {
   switch (status) {
     case 'self_assessment': return 1;
     case 'validation': return 2;
-    case 'planning':
-    case 'plan_review': return 3;
-    case 'delivered': return 4;
+    case 'planning': return 3;
+    case 'plan_review':
+    case 'delivered': return 3;
     default: return 0;
   }
 }
@@ -116,9 +110,9 @@ function Radar({ comps, onAxisClick }: { comps: CompetencyScore[]; onAxisClick?:
 }
 
 // ---------------- Gantt ----------------
-function Gantt({ trainings }: { trainings: PlannedTraining[] }) {
+function Gantt({ trainings, minMonths = 12 }: { trainings: PlannedTraining[]; minMonths?: number }) {
   const [sel, setSel] = useState<string | null>(null);
-  const total = Math.max(6, ...trainings.map((t) => t.startMonth + t.durationMonths));
+  const total = Math.max(minMonths, 6, ...trainings.map((t) => t.startMonth + t.durationMonths));
   const months = Array.from({ length: total }, (_, i) => i);
   const pos = (m: number) => ((m + 0.5) / total) * 100;
 
@@ -387,6 +381,8 @@ export default function ConsultantProfile() {
   const [building, setBuilding] = useState(false);
   const [planDone, setPlanDone] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [rolesEdit, setRolesEdit] = useState(false);
+  const [editSel, setEditSel] = useState<string[]>([]);
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
@@ -500,7 +496,9 @@ export default function ConsultantProfile() {
     [drillCat, liveComps],
   );
   const atRequired = useMemo(() => liveComps.filter((c) => c.required > 0 && c.current >= c.required).length, [liveComps]);
-  const rolesLabel = useMemo(() => ['Base Nuclear', ...selected.map(roleName)].filter(Boolean).join(', '), [selected, roles]);
+  const validated = !!assessment && ['planning', 'plan_review', 'delivered'].includes(assessment.status);
+  const nonBaseRoles = useMemo(() => roles.filter((r) => !r.is_base), [roles]);
+  const rolesAdding = editSel.some((r) => !selected.includes(r));
 
   const trainingById = useMemo(() => Object.fromEntries(trainings.map((t) => [t.id, t])), [trainings]);
   const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
@@ -587,6 +585,21 @@ export default function ConsultantProfile() {
     const { error } = await supabase.from('assessments').update({ status: 'planning' }).eq('id', assessment.id);
     if (error) setError(error.message);
     setSaving(false); setModalStep(null); load();
+  }
+
+  function openRolesEdit() { setEditSel([...selected]); setRolesEdit(true); }
+  async function saveRoles() {
+    if (!assessment) return;
+    setSaving(true); setError(null);
+    const added = editSel.filter((r) => !selected.includes(r));
+    await supabase.from('assessment_roles').delete().eq('assessment_id', assessment.id);
+    if (editSel.length) {
+      const { error } = await supabase.from('assessment_roles').insert(editSel.map((role_id) => ({ assessment_id: assessment.id, role_id })));
+      if (error) { setError(error.message); setSaving(false); return; }
+    }
+    // Adding roles widens scope, so the assessment restarts from self-assessment.
+    if (added.length) await supabase.from('assessments').update({ status: 'self_assessment' }).eq('id', assessment.id);
+    setSaving(false); setRolesEdit(false); await load();
   }
 
   async function generatePlan() {
@@ -709,21 +722,50 @@ export default function ConsultantProfile() {
 
       <NuclearisationProcess steps={STEPS} current={current} onSelect={(i) => { if (i === 0) setSetupWiz(0); setModalStep(i); }} />
 
-      <div className="profile-hero">
-        <div className="card fig-card">
-          <Figure progress={progress} full={full} />
-          <div className="fig-readout">
-            <div className="big-pct">{pct}%</div>
-            <div className="fig-caption">SQEPimeter</div>
-            {hasScores ? (
-              <div className={`fig-sub${full ? ' gold' : ''}`}>{full ? 'Fully SQEP for this role' : `${atRequired}/${liveComps.length} competencies at the required level`}</div>
+      <div className="profile-top">
+        <div className="profile-left">
+          <div className="card fig-card">
+            {validated ? (
+              <>
+                <Figure progress={progress} full={full} />
+                <div className="fig-readout">
+                  <div className="big-pct">{pct}%</div>
+                  <div className="fig-caption">SQEPimeter</div>
+                  {full
+                    ? <div className="fig-sqepified">This consultant is SQEPified</div>
+                    : <div className="fig-sub">{atRequired}/{liveComps.length} competencies at the required level</div>}
+                </div>
+              </>
             ) : (
-              <div className="fig-sub">Not started</div>
+              <div className="fig-placeholder">
+                <div className="fig-placeholder-atom"><span /><span /><span /></div>
+                <p className="muted">The SQEPimeter appears once the assessment is validated.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="card radar-card">
+            <div className="radar-head">
+              <h2>Competency map{drillCat && <> · <span className="radar-cat">{drillCat}</span></>}</h2>
+              {drillCat && <button className="link-btn" onClick={() => setDrillCat(null)}>← All categories</button>}
+            </div>
+            {hasScores && !drillCat && <p className="muted radar-roles">Click a category to see its competencies.</p>}
+            {hasScores ? (
+              <>
+                <Radar
+                  key={drillCat ?? 'all'}
+                  comps={drillCat ? drillData : radarData}
+                  onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
+                />
+                <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
+              </>
+            ) : (
+              <EmptyViz title="Not assessed yet" hint="Map fills in once the consultant completes their self-assessment." />
             )}
           </div>
         </div>
 
-        <div className="hero-side">
+        <div className="profile-right">
           <div className="card">
             <h2 className="panel-title">Details</h2>
             <dl className="info-list">
@@ -740,7 +782,7 @@ export default function ConsultantProfile() {
             )}
           </div>
           <div className="card">
-            <h2 className="panel-title">Assessment</h2>
+            <h2 className="panel-title">Roles</h2>
             {!assessment ? (
               <>
                 <p className="assess-missing"><span className="dot-missing" />No assessment yet</p>
@@ -748,41 +790,24 @@ export default function ConsultantProfile() {
               </>
             ) : (
               <>
-                <p className="assess-status">{STATUS_LABEL[assessment.status] ?? assessment.status}</p>
-                <p className="muted card-hint">Roles: Base Nuclear{selected.length ? ', ' + selected.map(roleName).join(', ') : ''}</p>
-                <button className="btn btn-sm" onClick={openSetup}>Open set-up</button>
+                <div className="chip-wrap">
+                  <span className="role-chip locked">Base Nuclear</span>
+                  {selected.map((rid) => <span className="role-chip" key={rid}>{roleName(rid)}</span>)}
+                </div>
+                {isStaff && <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={openRolesEdit}>Edit roles</button>}
               </>
             )}
           </div>
         </div>
       </div>
 
-      <div className="profile-lower">
-        <div className="card radar-card">
-          <div className="radar-head">
-            <h2>Competency map{drillCat && <> · <span className="radar-cat">{drillCat}</span></>}</h2>
-            {drillCat && <button className="link-btn" onClick={() => setDrillCat(null)}>← All categories</button>}
-          </div>
-          {hasScores && <p className="muted radar-roles">Assessed against {rolesLabel}.{!drillCat && ' Click a category to see its competencies.'}</p>}
-          {hasScores ? (
-            <>
-              <Radar
-                key={drillCat ?? 'all'}
-                comps={drillCat ? drillData : radarData}
-                onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
-              />
-              <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
-            </>
-          ) : (
-            <EmptyViz title="Not assessed yet" hint="Map fills in once the consultant completes their self-assessment." />
-          )}
-        </div>
+      <div className="profile-plan">
         <div className="card gantt-card">
           <div className="gantt-head">
             <h2>Training plan</h2>
             {isStaff && planForGantt.length > 0 && <button className="btn btn-sm" onClick={() => setEditorOpen(true)}>Edit</button>}
           </div>
-          {planForGantt.length ? <Gantt trainings={planForGantt} /> : (
+          {planForGantt.length ? <Gantt trainings={planForGantt} minMonths={assessment?.horizon_months ?? 18} /> : (
             <EmptyViz title="No plan yet" hint="The plan is generated at the Plan step once levels are validated." />
           )}
         </div>
@@ -1048,6 +1073,29 @@ export default function ConsultantProfile() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>{STEPS[modalStep]}</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
             <div className="modal-step"><p className="muted">{assessment?.status === 'delivered' ? 'This consultant is fully nuclearised for their role.' : 'Reached once the plan is complete and every level is confirmed.'}</p></div>
+          </div>
+        </div>
+      )}
+
+      {rolesEdit && (
+        <div className="modal-overlay" onClick={() => setRolesEdit(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Roles</h2><button className="modal-close" onClick={() => setRolesEdit(false)} aria-label="Close">×</button></div>
+            <div className="modal-step">
+              <div className="role-pick">
+                <span className="role-chip locked">Base Nuclear</span>
+                {nonBaseRoles.map((r) => (
+                  <button key={r.id} type="button" className={`role-chip toggle${editSel.includes(r.id) ? ' on' : ''}`}
+                    onClick={() => setEditSel((s) => (s.includes(r.id) ? s.filter((x) => x !== r.id) : [...s, r.id]))}>
+                    {r.name}
+                  </button>
+                ))}
+              </div>
+              {rolesAdding && <p className="sync-msg err" style={{ marginTop: 14 }}>Adding a role widens what this consultant is assessed against. Saving restarts the assessment from self-assessment.</p>}
+              <button className="btn btn-primary btn-block" style={{ marginTop: 14 }} onClick={saveRoles} disabled={saving}>
+                {saving ? 'Saving…' : rolesAdding ? 'Save and restart assessment' : 'Save roles'}
+              </button>
+            </div>
           </div>
         </div>
       )}
