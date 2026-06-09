@@ -335,7 +335,6 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [reLevel, setReLevel] = useState<number | null>(null);
 
   const total = Math.max(horizon || 18, 12, ...draft.map((d) => d.start_month + 1));
   const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
@@ -357,7 +356,7 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
   }
   function up() { dragRef.current = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
   function down(e: React.PointerEvent, id: string) {
-    e.preventDefault(); dragRef.current = { id, track: e.currentTarget.parentElement as HTMLElement }; setSel(id); setReLevel(null);
+    e.preventDefault(); dragRef.current = { id, track: e.currentTarget.parentElement as HTMLElement }; setSel(id);
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
@@ -369,12 +368,7 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
     while (used.has(m) && m < total) m++;
     const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setDraft((d) => [...d, { ...base, id: nid, start_month: Math.min(total - 1, Math.max(0, m)), status: 'planned', outcome_level: null, sort_order: d.length }]);
-    setSel(nid); setReLevel(null);
-  }
-  function duplicate(it: PlanItem) {
-    const nid = `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setDraft((d) => [...d, { ...it, id: nid, start_month: Math.min(total - 1, it.start_month + 1), status: 'planned', outcome_level: null, sort_order: d.length }]);
-    setSel(nid); setReLevel(null);
+    setSel(nid);
   }
   function addLine(item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) {
     setDraft((d) => [...d, { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, assessment_id: assessmentId, duration_months: 1, status: 'planned', outcome_level: null, note: null, sort_order: d.length, created_at: '', ...item } as PlanItem]);
@@ -398,19 +392,7 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
     } catch (e) { setErr(e instanceof Error ? e.message : 'Save failed'); setSaving(false); }
   }
 
-  async function deliver(it: PlanItem) {
-    await supabase.from('plan_items').update({ status: 'training_done' }).eq('id', it.id);
-    setDraft((d) => d.map((x) => (x.id === it.id ? { ...x, status: 'training_done' } : x)));
-  }
-  async function confirm(it: PlanItem, level: number) {
-    await supabase.from('assessment_scores').upsert([{ assessment_id: assessmentId, competency_id: it.competency_id, validated_level: level }], { onConflict: 'assessment_id,competency_id' });
-    await supabase.from('plan_items').update({ status: 'confirmed', outcome_level: level }).eq('id', it.id);
-    setDraft((d) => d.map((x) => (x.id === it.id ? { ...x, status: 'confirmed', outcome_level: level } : x)));
-    setReLevel(null);
-  }
-
   const selItem = draft.find((d) => d.id === sel) ?? null;
-  const isSaved = selItem ? !selItem.id.startsWith('new-') : false;
 
   return (
     <div className="plan-editor">
@@ -441,7 +423,7 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
                     style={{ left: `${pos(it.start_month)}%` }}
                     title={`${label(it)} · M${it.start_month + 1}`}
                     onPointerDown={(e) => down(e, it.id)}
-                    onClick={() => { setSel(it.id); setReLevel(null); }} />
+                    onClick={() => { setSel(it.id); }} />
                 ))}
               </div>
               <button className="pe-add-occ" title="Add another occurrence of this training" onClick={() => addOccurrence(lane.items)}>+</button>
@@ -458,16 +440,6 @@ function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, train
             <div className="muted">{compName(selItem.competency_id)} · level {selItem.from_level} → {selItem.to_level} · month {selItem.start_month + 1}</div>
           </div>
           <div className="pe-detail-actions">
-            {!isSaved ? <span className="muted">Save the plan to track delivery</span>
-              : selItem.status === 'planned' ? <button className="btn btn-sm" onClick={() => deliver(selItem)}>Mark delivered</button>
-              : selItem.status === 'training_done' ? (
-                <span className="plan-reassess">
-                  <span className="muted">Confirm level:</span>
-                  <StarRating value={reLevel ?? selItem.to_level} onChange={setReLevel} showLabel={false} size="sm" />
-                  <button className="btn btn-sm btn-primary" onClick={() => confirm(selItem, reLevel ?? selItem.to_level)}>Confirm</button>
-                </span>
-              ) : <span className="plan-confirmed">✓ confirmed at level {selItem.outcome_level}</span>}
-            <button className="link-btn" onClick={() => duplicate(selItem)}>Duplicate</button>
             <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
           </div>
         </div>
