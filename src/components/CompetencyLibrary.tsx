@@ -24,6 +24,7 @@ export default function CompetencyLibrary() {
   const [cats, setCats] = useState<CompetencyCategory[]>([]);
   const [subs, setSubs] = useState<CompetencySubcategory[]>([]);
   const [comps, setComps] = useState<Competency[]>([]);
+  const [completeIds, setCompleteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,18 +43,30 @@ export default function CompetencyLibrary() {
 
   async function load() {
     setLoading(true);
-    const [c, s, k] = await Promise.all([
+    const [c, s, k, lp] = await Promise.all([
       supabase.from('competency_categories').select('*').order('sort_order').order('name'),
       supabase.from('competency_subcategories').select('*').order('sort_order').order('name'),
       supabase.from('competencies').select('*').order('sort_order').order('name'),
+      supabase.from('competency_level_paths').select('competency_id, level, actions'),
     ]);
-    const err = c.error || s.error || k.error;
+    const err = c.error || s.error || k.error || lp.error;
     if (err) setError(err.message);
     else {
       setError(null);
       setCats((c.data as CompetencyCategory[]) ?? []);
       setSubs((s.data as CompetencySubcategory[]) ?? []);
       setComps((k.data as Competency[]) ?? []);
+      // A competency is "complete" when every level on the ladder (2-5) has a written expectation.
+      const levelsByComp: Record<string, Set<number>> = {};
+      ((lp.data as { competency_id: string; level: number; actions: string | null }[]) ?? []).forEach((r) => {
+        if ((r.actions ?? '').trim()) (levelsByComp[r.competency_id] ??= new Set()).add(r.level);
+      });
+      const complete = new Set<string>();
+      ((k.data as Competency[]) ?? []).forEach((comp) => {
+        const ls = levelsByComp[comp.id];
+        if (ls && [2, 3, 4, 5].every((n) => ls.has(n))) complete.add(comp.id);
+      });
+      setCompleteIds(complete);
     }
     setLoading(false);
   }
@@ -178,6 +191,7 @@ export default function CompetencyLibrary() {
               <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
                 <span className="c-breadcrumb">{catById[c.category_id]}{c.subcategory_id && subById[c.subcategory_id] ? ` · ${subById[c.subcategory_id]}` : ''}</span>
                 <span className="c-name">{c.name}</span>
+                {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
               </button>
             ))}
           </div>
@@ -227,6 +241,7 @@ export default function CompetencyLibrary() {
                       {activeComps.map((c) => (
                         <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
                           <span className="c-name">{c.name}</span>
+                          {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
                         </button>
                       ))}
                       <button className="comp-card comp-add" onClick={() => openNew(cat.id, activeSubObj.id)}>
@@ -294,7 +309,7 @@ export default function CompetencyLibrary() {
       {pathComp && (
         <LearningPath
           competency={pathComp}
-          onClose={() => setPathComp(null)}
+          onClose={() => { setPathComp(null); load(); }}
           onEdit={(c) => { setPathComp(null); startEditComp(c); }}
           onDelete={(c) => { setPathComp(null); deleteComp(c); }}
         />

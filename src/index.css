@@ -1889,3 +1889,11 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .sa-val-row { border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--surface-2); margin-bottom: 10px; }
 .sa-val-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .sa-val-set { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* Library: incomplete competency flag */
+.c-flag {
+  margin-left: auto; align-self: center; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--brand-gold); border: 1px solid var(--brand-gold);
+  border-radius: 999px; padding: 2px 8px;
+}
