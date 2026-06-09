@@ -213,4 +213,5 @@ export interface AssessmentScore {
   self_level: number | null;
   validated_level: number | null;
   note: string | null;
+  self_note: string | null;
 }

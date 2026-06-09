@@ -700,6 +700,7 @@ export default function ConsultantProfile() {
   const [scores, setScores] = useState<AssessmentScore[]>([]);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [clts, setClts] = useState<CompetencyLevelTraining[]>([]);
+  const [paths, setPaths] = useState<CompetencyLevelPath[]>([]);
   const [trainings, setTrainingsList] = useState<Training[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [deliverers, setDeliverers] = useState<TrainingDeliverer[]>([]);
@@ -721,6 +722,8 @@ export default function ConsultantProfile() {
   const [roleOpen, setRoleOpen] = useState(false);
   const roleInputRef = useRef<HTMLInputElement>(null);
   const [selfScores, setSelfScores] = useState<Record<string, number>>({});
+  const [selfNotes, setSelfNotes] = useState<Record<string, string>>({});
+  const [saIdx, setSaIdx] = useState(0);
   const [valScores, setValScores] = useState<Record<string, number>>({});
   const [drillCat, setDrillCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -731,7 +734,7 @@ export default function ConsultantProfile() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [c, r, a, k, rc, cat, sub, clt, tns, trn, del] = await Promise.all([
+    const [c, r, a, k, rc, cat, sub, clt, clp, tns, trn, del] = await Promise.all([
       supabase.from('consultants').select('*').eq('id', id).maybeSingle(),
       supabase.from('roles').select('*').order('is_base', { ascending: false }).order('sort_order').order('name'),
       supabase.from('assessments').select('*').eq('consultant_id', id).neq('status', 'cancelled')
@@ -741,11 +744,12 @@ export default function ConsultantProfile() {
       supabase.from('competency_categories').select('*'),
       supabase.from('competency_subcategories').select('*'),
       supabase.from('competency_level_trainings').select('*'),
+      supabase.from('competency_level_paths').select('*'),
       supabase.from('trainings').select('*'),
       supabase.from('trainers').select('*'),
       supabase.from('training_deliverers').select('*'),
     ]);
-    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error || clt.error || tns.error || trn.error || del.error;
+    const err = c.error || r.error || a.error || k.error || rc.error || cat.error || sub.error || clt.error || clp.error || tns.error || trn.error || del.error;
     if (err) { setError(err.message); setLoading(false); return; }
     setError(null);
     setConsultant((c.data as Consultant) ?? null);
@@ -755,6 +759,7 @@ export default function ConsultantProfile() {
     setCats((cat.data as CompetencyCategory[]) ?? []);
     setSubs((sub.data as CompetencySubcategory[]) ?? []);
     setClts((clt.data as CompetencyLevelTraining[]) ?? []);
+    setPaths((clp.data as CompetencyLevelPath[]) ?? []);
     setTrainingsList((tns.data as Training[]) ?? []);
     setTrainers((trn.data as Trainer[]) ?? []);
     setDeliverers((del.data as TrainingDeliverer[]) ?? []);
@@ -899,6 +904,15 @@ export default function ConsultantProfile() {
     () => cats.map((cat) => ({ name: cat.name, items: applicable.filter((c) => c.category === cat.name) })).filter((g) => g.items.length),
     [cats, applicable],
   );
+  // One ordered list for the step-by-step self-assessment.
+  const selfList = useMemo(() => selfGroups.flatMap((g) => g.items.map((c) => ({ ...c, category: g.name }))), [selfGroups]);
+  // Per-competency, per-level expectation text from the library.
+  const LEVEL_NAME: Record<number, string> = { 1: 'No knowledge', 2: 'Awareness', 3: 'Basic competence', 4: 'Full competence (SQEP)', 5: 'Expert' };
+  function expectation(competencyId: string, level: number): string {
+    if (level < 1) return '';
+    const p = paths.find((x) => x.competency_id === competencyId && x.level === level);
+    return p?.actions?.trim() || `${LEVEL_NAME[level]} — no detailed description set in the library for this level.`;
+  }
 
   const toggle = (rid: string) => setSelected((s) => (s.includes(rid) ? s.filter((x) => x !== rid) : [...s, rid]));
 
@@ -950,8 +964,11 @@ export default function ConsultantProfile() {
   useEffect(() => {
     if (modalStep === 1) {
       const seed: Record<string, number> = {};
-      applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.self_level ?? sc?.ai_level ?? 0; });
+      const seedNotes: Record<string, string> = {};
+      applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.self_level ?? sc?.ai_level ?? 0; seedNotes[c.id] = sc?.self_note ?? ''; });
       setSelfScores(seed);
+      setSelfNotes(seedNotes);
+      setSaIdx(0);
     }
     if (modalStep === 2) {
       const seed: Record<string, number> = {};
@@ -1024,7 +1041,7 @@ export default function ConsultantProfile() {
   async function submitSelf() {
     if (!assessment) return;
     setSaving(true); setError(null);
-    const rows = applicable.map((c) => ({ assessment_id: assessment.id, competency_id: c.id, self_level: selfScores[c.id] ?? 0 }));
+    const rows = applicable.map((c) => ({ assessment_id: assessment.id, competency_id: c.id, self_level: selfScores[c.id] ?? 0, self_note: (selfNotes[c.id] ?? '').trim() || null }));
     const { error: upErr } = await supabase.from('assessment_scores').upsert(rows, { onConflict: 'assessment_id,competency_id' });
     if (upErr) { setError(upErr.message); setSaving(false); return; }
     const { error } = await supabase.from('assessments').update({ status: 'validation' }).eq('id', assessment.id);
@@ -1359,51 +1376,69 @@ export default function ConsultantProfile() {
             <div className="modal-step">
               {!assessment ? (
                 <p className="muted">Set-up has to be completed first.</p>
-              ) : !(isSelf || user?.product_role === 'superadmin') ? (
-                assessment.status === 'self_assessment' ? (
-                  <p className="muted">Waiting for the consultant to complete their self-assessment. You'll be able to validate once they submit it.</p>
-                ) : (
-                  <>
-                    <p className="muted">The consultant has completed their self-assessment.</p>
-                    <div className="sa-list">
-                      {selfGroups.map((g) => (
-                        <div className="sa-group" key={g.name}>
-                          <div className="sa-cat">{g.name}</div>
-                          {g.items.map((c) => (
-                            <div className="sa-row" key={c.id}>
-                              <div className="sa-name">{c.name}</div>
-                              <span className="cohort-pill">self {scoreByComp[c.id]?.self_level ?? 0}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )
               ) : applicable.length === 0 ? (
                 <p className="muted">No competencies in scope yet. Add roles in Set-up.</p>
+              ) : (isSelf || user?.product_role === 'superadmin') && assessment.status === 'self_assessment' ? (
+                (() => {
+                  const c = selfList[saIdx];
+                  if (!c) return null;
+                  const lvl = selfScores[c.id] ?? 0;
+                  const note = selfNotes[c.id] ?? '';
+                  const ai = scoreByComp[c.id]?.ai_level;
+                  const canNext = lvl > 0 && note.trim().length > 0;
+                  const last = saIdx === selfList.length - 1;
+                  return (
+                    <div className="sa-wiz">
+                      <div className="sa-wiz-top">
+                        <span className="sa-wiz-prog">Competency {saIdx + 1} of {selfList.length}</span>
+                        <span className="sa-wiz-cat">{c.category}</span>
+                      </div>
+                      <h3 className="sa-wiz-name">{c.name}</h3>
+                      <div className="sa-wiz-stars">
+                        <StarRating value={lvl} onChange={(v) => setSelfScores((s) => ({ ...s, [c.id]: v }))} showLabel size="md" />
+                        {ai != null && <span className="sa-ai">AI suggested {ai}</span>}
+                      </div>
+                      {lvl > 0 ? (
+                        <div className="sa-expect">
+                          <div className="sa-expect-lbl">Level {lvl} · {LEVEL_NAME[lvl]} — what that means here</div>
+                          <p>{expectation(c.id, lvl)}</p>
+                        </div>
+                      ) : (
+                        <p className="muted sa-expect-hint">Choose a level to see what it means for this competency.</p>
+                      )}
+                      <label className="sa-reason-lbl">Explain your assessment <span className="req">*</span>
+                        <textarea className="field" rows={3} value={note} placeholder="Why do you place yourself at this level? Give examples." onChange={(e) => setSelfNotes((s) => ({ ...s, [c.id]: e.target.value }))} />
+                      </label>
+                      {error && <p className="sync-msg err">{error}</p>}
+                      <div className="sa-wiz-foot">
+                        <button className="link-btn" disabled={saIdx === 0} onClick={() => setSaIdx((i) => Math.max(0, i - 1))}>Back</button>
+                        {last ? (
+                          <button className="btn btn-primary" disabled={!canNext || saving} onClick={submitSelf}>{saving ? 'Submitting…' : 'Submit self-assessment'}</button>
+                        ) : (
+                          <button className="btn btn-primary" disabled={!canNext} onClick={() => setSaIdx((i) => i + 1)}>Next</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : assessment.status === 'self_assessment' ? (
+                <p className="muted">Waiting for the consultant to complete their self-assessment. You'll be able to validate once they submit it.</p>
               ) : (
                 <>
-                  <p className="muted">Rate each competency honestly against the 0–5 scale. Where the AI proposed a level from the CV it's shown as a starting point; adjust it to reflect reality. When you submit, it goes to the Technical Director to review.</p>
-                  <div className="sa-list">
-                    {selfGroups.map((g) => (
-                      <div className="sa-group" key={g.name}>
-                        <div className="sa-cat">{g.name}</div>
-                        {g.items.map((c) => {
-                          const ai = scoreByComp[c.id]?.ai_level;
-                          return (
-                            <div className="sa-row" key={c.id}>
-                              <div className="sa-name">{c.name}{ai != null && <span className="sa-ai">AI suggested {ai}</span>}</div>
-                              <StarRating value={selfScores[c.id] ?? 0} onChange={(v) => setSelfScores((s) => ({ ...s, [c.id]: v }))} showLabel={false} size="sm" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
+                  <p className="muted">{(isSelf || user?.product_role === 'superadmin') ? 'Your submitted self-assessment.' : 'The consultant’s self-assessment: their level and reasoning against the library expectation for each competency.'}</p>
+                  <div className="sa-report">
+                    {selfList.map((c) => {
+                      const sc = scoreByComp[c.id];
+                      const lvl = sc?.self_level ?? 0;
+                      return (
+                        <div className="sa-rep-item" key={c.id}>
+                          <div className="sa-rep-head"><span className="sa-rep-name">{c.name}</span><span className="cohort-pill">{LEVEL_NAME[lvl] ?? 'Not rated'} ({lvl})</span></div>
+                          <div className="sa-rep-line"><span className="muted">Expectation:</span> {expectation(c.id, lvl)}</div>
+                          <div className="sa-rep-line"><span className="muted">Reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <button className="btn btn-primary btn-block" onClick={submitSelf} disabled={saving}>
-                    {saving ? 'Submitting…' : 'Submit for review'}
-                  </button>
                 </>
               )}
             </div>
@@ -1432,16 +1467,23 @@ export default function ConsultantProfile() {
                         <div className="sa-cat">{g.name}</div>
                         {g.items.map((c) => {
                           const sc = scoreByComp[c.id];
+                          const sl = sc?.self_level ?? 0;
                           return (
-                            <div className="sa-row" key={c.id}>
-                              <div className="sa-name">{c.name}
+                            <div className="sa-val-row" key={c.id}>
+                              <div className="sa-val-head">
+                                <span className="sa-rep-name">{c.name}</span>
                                 <span className="sa-ai">
                                   {sc?.self_level != null ? `self ${sc.self_level}` : 'no self-assessment'}
                                   {sc?.ai_level != null ? ` · AI ${sc.ai_level}` : ''}
                                   {` · required ${c.required}`}
                                 </span>
                               </div>
-                              <StarRating value={valScores[c.id] ?? 0} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel={false} size="sm" />
+                              {sl > 0 && <div className="sa-rep-line"><span className="muted">They rated {LEVEL_NAME[sl]} — expectation:</span> {expectation(c.id, sl)}</div>}
+                              <div className="sa-rep-line"><span className="muted">Their reasoning:</span> {sc?.self_note?.trim() || '—'}</div>
+                              <div className="sa-val-set">
+                                <span className="muted">Validated level</span>
+                                <StarRating value={valScores[c.id] ?? 0} onChange={(v) => setValScores((s) => ({ ...s, [c.id]: v }))} showLabel size="sm" />
+                              </div>
                             </div>
                           );
                         })}
