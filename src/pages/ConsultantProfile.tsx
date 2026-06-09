@@ -70,6 +70,23 @@ function Figure({ progress, full }: { progress: number; full: boolean }) {
 }
 
 // ---------------- Radar ----------------
+function LevelBars({ items }: { items: CompetencyScore[] }) {
+  return (
+    <div className="lvlbars">
+      {items.map((it) => (
+        <div className="lvlbar" key={it.competency}>
+          <div className="lvlbar-name" title={it.competency}>{it.competency}</div>
+          <div className="lvlbar-track">
+            <span className="lvlbar-fill" style={{ width: `${(Math.max(0, it.current) / 5) * 100}%` }} />
+            <span className="lvlbar-target" style={{ left: `${(it.target / 5) * 100}%` }} title={`Target: level ${it.target}`} />
+          </div>
+          <div className="lvlbar-val">{Math.round(it.current)} <span className="muted">/ {it.target}</span></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Radar({ comps, onAxisClick }: { comps: CompetencyScore[]; onAxisClick?: (label: string) => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id); }, []);
@@ -752,11 +769,15 @@ export default function ConsultantProfile() {
             {hasScores && !drillCat && <p className="muted radar-roles">Click a category to see its competencies.</p>}
             {hasScores ? (
               <>
-                <Radar
-                  key={drillCat ?? 'all'}
-                  comps={drillCat ? drillData : radarData}
-                  onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
-                />
+                {drillCat && drillData.length < 3 ? (
+                  <LevelBars items={drillData} />
+                ) : (
+                  <Radar
+                    key={drillCat ?? 'all'}
+                    comps={drillCat ? drillData : radarData}
+                    onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
+                  />
+                )}
                 <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
               </>
             ) : (
