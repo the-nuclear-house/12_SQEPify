@@ -40,10 +40,6 @@ export default function Consultants() {
     <div>
       <div className="page-head">
         <h1>Consultants</h1>
-        <p>
-          Consultants pulled from the Control Room. A Technical Director sees their own
-          people; a superadmin sees everyone. Leavers are kept as history.
-        </p>
       </div>
 
       <div className="toolbar">

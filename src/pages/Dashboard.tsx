@@ -104,7 +104,6 @@ export default function Dashboard() {
     <div>
       <div className="page-head">
         <h1>Dashboard</h1>
-        <p>Your consultants and where each one sits in the SQEP journey.</p>
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}

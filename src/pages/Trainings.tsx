@@ -11,10 +11,6 @@ export default function Trainings() {
     <div>
       <div className="page-head">
         <h1>Trainings</h1>
-        <p>
-          The catalogue of trainings, and the approved trainers who can deliver them.
-          A training can only list trainers that appear here.
-        </p>
       </div>
 
       <div className="subtabs">

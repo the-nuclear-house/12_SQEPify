@@ -11,10 +11,6 @@ export default function Competencies() {
     <div>
       <div className="page-head">
         <h1>Nuclear Competencies</h1>
-        <p>
-          The library defines every competency. Roles group them into what a given role
-          must hold. Everyone is assessed against Base Nuclear, plus any roles you select.
-        </p>
       </div>
 
       <div className="subtabs">

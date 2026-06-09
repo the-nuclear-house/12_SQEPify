@@ -85,10 +85,6 @@ export default function System() {
     <div>
       <div className="page-head">
         <h1>System</h1>
-        <p>
-          Administration. Microsoft 365 handles sign in; this is where the consultant
-          data is refreshed and, later, users and roles are managed.
-        </p>
       </div>
 
       <Card title="Control Room sync">
