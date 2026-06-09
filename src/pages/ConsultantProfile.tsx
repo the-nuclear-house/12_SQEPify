@@ -1243,32 +1243,30 @@ export default function ConsultantProfile() {
             <div className="modal-step">
               {setupWiz === 0 && (
                 <>
-                  <p className="muted">Which roles is this consultant assessed against? Base Nuclear always applies; type to add any role-based competencies on top.</p>
+                  <p className="muted">Which roles is this consultant assessed against?</p>
+
+                  <div className="rolepick-chips">
+                    {baseRole && <span className="role-chip locked">{baseRole.name}</span>}
+                    {selected.map((rid) => (
+                      <span className="role-chip" key={rid}>{roleName(rid)}
+                        <button className="role-chip-x" onMouseDown={(e) => e.preventDefault()} onClick={() => toggle(rid)} aria-label={`Remove ${roleName(rid)}`}>×</button>
+                      </span>
+                    ))}
+                  </div>
 
                   {otherRoles.length === 0 ? (
-                    <div className="ms"><div className="ms-control static">
-                      {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
-                      <span className="muted role-chip-hint">No role-based roles defined yet</span>
-                    </div></div>
+                    <p className="muted role-chip-hint">No role-based roles defined yet.</p>
                   ) : (
-                    <div className="ms">
-                      <div className="ms-control" onClick={() => { roleInputRef.current?.focus(); setRoleOpen(true); }}>
-                        {baseRole && <span className="role-chip locked">{baseRole.name}<span className="role-chip-tag">always</span></span>}
-                        {selected.map((rid) => (
-                          <span className="role-chip" key={rid}>{roleName(rid)}
-                            <button className="role-chip-x" onMouseDown={(e) => e.preventDefault()} onClick={() => toggle(rid)} aria-label={`Remove ${roleName(rid)}`}>×</button>
-                          </span>
-                        ))}
-                        <input ref={roleInputRef} className="ms-input" value={roleQuery}
-                          placeholder={selected.length ? 'Add another…' : 'Add roles…'}
-                          onChange={(e) => { setRoleQuery(e.target.value); setRoleOpen(true); }}
-                          onFocus={() => setRoleOpen(true)}
-                          onBlur={() => setTimeout(() => setRoleOpen(false), 120)} />
-                      </div>
+                    <div className="rolepick">
+                      <input ref={roleInputRef} className="field rolepick-input" value={roleQuery}
+                        placeholder="Search roles to add…"
+                        onChange={(e) => { setRoleQuery(e.target.value); setRoleOpen(true); }}
+                        onFocus={() => setRoleOpen(true)}
+                        onBlur={() => setTimeout(() => setRoleOpen(false), 150)} />
                       {roleOpen && (() => {
                         const matches = otherRoles.filter((r) => !selected.includes(r.id) && r.name.toLowerCase().includes(roleQuery.trim().toLowerCase()));
                         return (
-                          <div className="ms-menu">
+                          <div className="rolepick-menu">
                             {matches.length === 0 ? (
                               <div className="ms-empty">{roleQuery ? `No roles match “${roleQuery}”` : 'All roles added'}</div>
                             ) : matches.map((r) => (
@@ -1361,6 +1359,27 @@ export default function ConsultantProfile() {
             <div className="modal-step">
               {!assessment ? (
                 <p className="muted">Set-up has to be completed first.</p>
+              ) : !(isSelf || user?.product_role === 'superadmin') ? (
+                assessment.status === 'self_assessment' ? (
+                  <p className="muted">Waiting for the consultant to complete their self-assessment. You'll be able to validate once they submit it.</p>
+                ) : (
+                  <>
+                    <p className="muted">The consultant has completed their self-assessment.</p>
+                    <div className="sa-list">
+                      {selfGroups.map((g) => (
+                        <div className="sa-group" key={g.name}>
+                          <div className="sa-cat">{g.name}</div>
+                          {g.items.map((c) => (
+                            <div className="sa-row" key={c.id}>
+                              <div className="sa-name">{c.name}</div>
+                              <span className="cohort-pill">self {scoreByComp[c.id]?.self_level ?? 0}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )
               ) : applicable.length === 0 ? (
                 <p className="muted">No competencies in scope yet. Add roles in Set-up.</p>
               ) : (
