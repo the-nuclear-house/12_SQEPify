@@ -1851,3 +1851,8 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .move-req-actions { display: flex; align-items: center; gap: 10px; }
 .cohort-actions { display: flex; align-items: center; gap: 10px; }
 .cohort-month { width: auto; padding: 4px 8px; }
+
+/* Test login persona buttons (temporary) */
+.persona-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.persona-btn { width: 100%; }
+.test-login-or { text-align: center; font-size: 12px; color: var(--text-faint); margin: 10px 0 6px; }
