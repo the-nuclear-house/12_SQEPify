@@ -1871,7 +1871,8 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .sa-wiz-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); }
 .sa-wiz-prog { font-family: var(--font-mono); }
 .sa-wiz-cat { color: var(--text-faint); }
-.sa-wiz-name { font-family: var(--font-display); font-size: 20px; margin: 6px 0 14px; }
+.sa-wiz-name { font-family: var(--font-display); font-size: 20px; margin: 6px 0 6px; }
+.sa-wiz-desc { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
 .sa-wiz-stars { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .sa-expect { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; }
 .sa-expect-lbl { font-size: 12px; font-weight: 600; color: var(--brand-cyan); margin-bottom: 6px; }

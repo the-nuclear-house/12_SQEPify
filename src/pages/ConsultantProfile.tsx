@@ -799,6 +799,7 @@ export default function ConsultantProfile() {
       .map((c) => ({
         id: c.id,
         name: c.name,
+        description: c.description,
         category: catById[c.category_id] ?? '',
         subcategory: c.subcategory_id ? subById[c.subcategory_id] ?? '' : '',
         required: required.get(c.id) ?? TARGET,
@@ -1396,6 +1397,7 @@ export default function ConsultantProfile() {
                         <span className="sa-wiz-cat">{c.category}</span>
                       </div>
                       <h3 className="sa-wiz-name">{c.name}</h3>
+                      {c.description && <p className="sa-wiz-desc">{c.description}</p>}
                       <div className="sa-wiz-stars">
                         <StarRating value={lvl} onChange={(v) => setSelfScores((s) => ({ ...s, [c.id]: v }))} showLabel size="md" />
                         {ai != null && <span className="sa-ai">AI suggested {ai}</span>}
