@@ -1696,3 +1696,38 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 }
 .gantt2-detail-name { font-size: 13px; font-weight: 600; }
 .gantt2-detail-sub { font-size: 12px; color: var(--text-muted); }
+
+/* Nuclearise animation + complete */
+.nuke-anim, .nuke-done { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 28px 12px; gap: 6px; }
+.nuke-msg { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin: 8px 0 0; }
+.nuke-atom { position: relative; width: 96px; height: 96px; }
+.nuke-atom span, .nuke-atom i {
+  position: absolute; inset: 0; margin: auto; border: 2px solid var(--brand-cyan); border-radius: 50%;
+  width: 92px; height: 36px; opacity: 0.9;
+}
+.nuke-atom span:nth-child(1) { transform: rotate(0deg); animation: nukeSpin 1.4s linear infinite; }
+.nuke-atom span:nth-child(2) { transform: rotate(60deg); border-color: var(--brand-green); animation: nukeSpin 1.4s linear infinite reverse; }
+.nuke-atom span:nth-child(3) { transform: rotate(120deg); border-color: var(--brand-cyan); animation: nukeSpin 1.9s linear infinite; }
+.nuke-atom i { width: 14px; height: 14px; background: var(--brand-green); border: 0; box-shadow: 0 0 14px var(--brand-green); animation: nukePulse 1s ease-in-out infinite; }
+@keyframes nukeSpin { to { transform: rotate(360deg); } }
+@keyframes nukePulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.4); } }
+.nuke-check {
+  width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 32px; color: #0b0f16;
+  background: var(--brand-green); box-shadow: 0 0 24px rgba(132,195,65,0.5); animation: nukePop .4s cubic-bezier(.22,.61,.36,1);
+}
+@keyframes nukePop { from { transform: scale(0); } to { transform: scale(1); } }
+.nuke-done .btn-block { margin-top: 14px; }
+
+/* Full-page plan editor */
+.plan-editor { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; padding: 22px clamp(16px, 5vw, 48px); }
+.plan-editor-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.plan-editor-bar h2 { margin: 0; }
+.plan-editor-bar .muted { font-size: 12px; }
+.pe-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); }
+.pe-gantt .gantt2-lane { height: 46px; }
+.pe-gantt .gantt2-diamond.draggable { cursor: grab; width: 15px; height: 15px; }
+.pe-gantt .gantt2-diamond.draggable:active { cursor: grabbing; }
+.pe-detail { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
+.pe-detail-name { font-size: 14px; font-weight: 600; }
+.pe-detail-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

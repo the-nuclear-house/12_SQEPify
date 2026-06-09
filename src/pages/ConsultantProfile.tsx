@@ -182,6 +182,191 @@ function EmptyViz({ title, hint }: { title: string; hint: string }) {
 }
 
 // ---------------- Page ----------------
+function AddLineModal({ applicable, trainings, total, onAdd, onClose }: {
+  applicable: { id: string; name: string; required: number }[];
+  trainings: Training[];
+  total: number;
+  onAdd: (item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) => void;
+  onClose: () => void;
+}) {
+  const [cid, setCid] = useState(applicable[0]?.id ?? '');
+  const [tid, setTid] = useState('');
+  const [to, setTo] = useState(4);
+  const [month, setMonth] = useState(0);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>Add training line</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-step">
+          <label>Competency</label>
+          <select className="field" value={cid} onChange={(e) => setCid(e.target.value)}>
+            {applicable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <label>Training</label>
+          <select className="field" value={tid} onChange={(e) => setTid(e.target.value)}>
+            <option value="">To be defined</option>
+            {trainings.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+          <label>Takes them to level</label>
+          <select className="field" value={to} onChange={(e) => setTo(Number(e.target.value))}>
+            {[2, 3, 4, 5].map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <label>Start month</label>
+          <select className="field" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+            {Array.from({ length: total }, (_, m) => <option key={m} value={m}>M{m + 1}</option>)}
+          </select>
+          <button className="btn btn-primary btn-block" disabled={!cid}
+            onClick={() => onAdd({ competency_id: cid, training_id: tid || null, title: tid ? null : 'Training to be defined', from_level: to - 1, to_level: to, start_month: month })}>
+            Add line
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanEditor({ assessmentId, horizon, comps, applicable, trainings, trainingById, initialItems, onClose }: {
+  assessmentId: string;
+  horizon: number;
+  comps: Competency[];
+  applicable: { id: string; name: string; required: number }[];
+  trainings: Training[];
+  trainingById: Record<string, Training>;
+  initialItems: PlanItem[];
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<PlanItem[]>(() => initialItems.map((i) => ({ ...i })));
+  const [sel, setSel] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [reLevel, setReLevel] = useState<number | null>(null);
+
+  const total = Math.max(horizon || 18, 12, ...draft.map((d) => d.start_month + 1));
+  const compName = (cid: string) => comps.find((c) => c.id === cid)?.name ?? 'Competency';
+  const pos = (m: number) => ((m + 0.5) / total) * 100;
+  const label = (it: PlanItem) => (it.training_id ? trainingById[it.training_id]?.title : null) ?? it.title ?? 'Training';
+
+  const lanes = useMemo(() => {
+    const m = new Map<string, PlanItem[]>();
+    draft.forEach((d) => { const a = m.get(d.competency_id) ?? []; a.push(d); m.set(d.competency_id, a); });
+    return [...m.entries()].map(([cid, items]) => ({ cid, name: compName(cid), items: items.sort((a, b) => a.start_month - b.start_month) }));
+  }, [draft, comps]);
+
+  const dragRef = useRef<{ id: string; track: HTMLElement } | null>(null);
+  function move(e: PointerEvent) {
+    const d = dragRef.current; if (!d) return;
+    const r = d.track.getBoundingClientRect();
+    const mth = Math.max(0, Math.min(total - 1, Math.round(((e.clientX - r.left) / r.width) * total - 0.5)));
+    setDraft((prev) => prev.map((it) => (it.id === d.id ? { ...it, start_month: mth } : it)));
+  }
+  function up() { dragRef.current = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }
+  function down(e: React.PointerEvent, id: string) {
+    e.preventDefault(); dragRef.current = { id, track: e.currentTarget.parentElement as HTMLElement }; setSel(id); setReLevel(null);
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }
+
+  function removeLine(id: string) { setDraft((d) => d.filter((x) => x.id !== id)); if (sel === id) setSel(null); }
+  function addLine(item: { competency_id: string; training_id: string | null; title: string | null; from_level: number; to_level: number; start_month: number }) {
+    setDraft((d) => [...d, { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, assessment_id: assessmentId, duration_months: 1, status: 'planned', outcome_level: null, note: null, sort_order: d.length, created_at: '', ...item } as PlanItem]);
+    setAddOpen(false);
+  }
+
+  async function save() {
+    setSaving(true); setErr(null);
+    const origIds = new Set(initialItems.map((i) => i.id));
+    const keptIds = new Set(draft.filter((d) => !d.id.startsWith('new-')).map((d) => d.id));
+    const toDelete = [...origIds].filter((id) => !keptIds.has(id));
+    const inserts = draft.filter((d) => d.id.startsWith('new-')).map((d, i) => ({ assessment_id: assessmentId, competency_id: d.competency_id, training_id: d.training_id, title: d.title, from_level: d.from_level, to_level: d.to_level, start_month: d.start_month, duration_months: 1, status: 'planned', sort_order: i }));
+    try {
+      if (toDelete.length) { const { error } = await supabase.from('plan_items').delete().in('id', toDelete); if (error) throw error; }
+      for (const u of draft.filter((d) => !d.id.startsWith('new-'))) {
+        const { error } = await supabase.from('plan_items').update({ start_month: u.start_month, training_id: u.training_id, title: u.title, from_level: u.from_level, to_level: u.to_level, sort_order: u.sort_order }).eq('id', u.id);
+        if (error) throw error;
+      }
+      if (inserts.length) { const { error } = await supabase.from('plan_items').insert(inserts); if (error) throw error; }
+      onClose();
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Save failed'); setSaving(false); }
+  }
+
+  async function deliver(it: PlanItem) {
+    await supabase.from('plan_items').update({ status: 'training_done' }).eq('id', it.id);
+    setDraft((d) => d.map((x) => (x.id === it.id ? { ...x, status: 'training_done' } : x)));
+  }
+  async function confirm(it: PlanItem, level: number) {
+    await supabase.from('assessment_scores').upsert([{ assessment_id: assessmentId, competency_id: it.competency_id, validated_level: level }], { onConflict: 'assessment_id,competency_id' });
+    await supabase.from('plan_items').update({ status: 'confirmed', outcome_level: level }).eq('id', it.id);
+    setDraft((d) => d.map((x) => (x.id === it.id ? { ...x, status: 'confirmed', outcome_level: level } : x)));
+    setReLevel(null);
+  }
+
+  const selItem = draft.find((d) => d.id === sel) ?? null;
+  const isSaved = selItem ? !selItem.id.startsWith('new-') : false;
+
+  return (
+    <div className="plan-editor">
+      <div className="plan-editor-bar">
+        <div>
+          <h2>Training plan</h2>
+          <span className="muted">Drag a diamond to reschedule it. Add or remove lines. Save when you're done.</span>
+        </div>
+        <div className="pe-actions">
+          <button className="btn btn-sm" onClick={() => setAddOpen(true)}>+ Add training</button>
+          <button className="btn btn-sm btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save plan'}</button>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+      {err && <p className="sync-msg err">{err}</p>}
+
+      <div className="gantt2 pe-gantt">
+        <div className="gantt2-scroll"><div className="gantt2-grid">
+          <div className="gantt2-axis">{Array.from({ length: total }, (_, m) => <span key={m} className="gantt2-tick" style={{ left: `${pos(m)}%` }}>M{m + 1}</span>)}</div>
+          {lanes.map((lane) => (
+            <div className="gantt2-lane" key={lane.cid}>
+              <div className="gantt2-lane-name" title={lane.name}>{lane.name}</div>
+              <div className="gantt2-track">
+                <span className="gantt2-baseline" />
+                {lane.items.map((it) => (
+                  <button key={it.id}
+                    className={`gantt2-diamond draggable ${it.status === 'confirmed' ? 'done' : it.status === 'training_done' ? 'in_progress' : ''}${sel === it.id ? ' sel' : ''}`}
+                    style={{ left: `${pos(it.start_month)}%` }}
+                    title={`${label(it)} · M${it.start_month + 1}`}
+                    onPointerDown={(e) => down(e, it.id)}
+                    onClick={() => { setSel(it.id); setReLevel(null); }} />
+                ))}
+              </div>
+            </div>
+          ))}
+          {lanes.length === 0 && <p className="muted" style={{ padding: 12 }}>No lines yet. Add a training to start.</p>}
+        </div></div>
+      </div>
+
+      {selItem && (
+        <div className="pe-detail">
+          <div className="pe-detail-main">
+            <div className="pe-detail-name">{label(selItem)}</div>
+            <div className="muted">{compName(selItem.competency_id)} · level {selItem.from_level} → {selItem.to_level} · month {selItem.start_month + 1}</div>
+          </div>
+          <div className="pe-detail-actions">
+            {!isSaved ? <span className="muted">Save the plan to track delivery</span>
+              : selItem.status === 'planned' ? <button className="btn btn-sm" onClick={() => deliver(selItem)}>Mark delivered</button>
+              : selItem.status === 'training_done' ? (
+                <span className="plan-reassess">
+                  <span className="muted">Confirm level:</span>
+                  <StarRating value={reLevel ?? selItem.to_level} onChange={setReLevel} showLabel={false} size="sm" />
+                  <button className="btn btn-sm btn-primary" onClick={() => confirm(selItem, reLevel ?? selItem.to_level)}>Confirm</button>
+                </span>
+              ) : <span className="plan-confirmed">✓ confirmed at level {selItem.outcome_level}</span>}
+            <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove line</button>
+          </div>
+        </div>
+      )}
+
+      {addOpen && <AddLineModal applicable={applicable} trainings={trainings} total={total} onAdd={addLine} onClose={() => setAddOpen(false)} />}
+    </div>
+  );
+}
+
 export default function ConsultantProfile() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -199,7 +384,9 @@ export default function ConsultantProfile() {
   const [clts, setClts] = useState<CompetencyLevelTraining[]>([]);
   const [trainings, setTrainingsList] = useState<Training[]>([]);
   const [planning, setPlanning] = useState(false);
-  const [reassess, setReassess] = useState<Record<string, number>>({});
+  const [building, setBuilding] = useState(false);
+  const [planDone, setPlanDone] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
@@ -328,14 +515,6 @@ export default function ConsultantProfile() {
     status: p.status === 'confirmed' ? 'done' : p.status === 'training_done' ? 'in_progress' : 'upcoming',
   })), [planItems, trainingById, comps]);
 
-  // Plan items grouped by competency, for the loop UI.
-  const planGroups = useMemo(() => {
-    const m = new Map<string, PlanItem[]>();
-    planItems.forEach((p) => { const a = m.get(p.competency_id) ?? []; a.push(p); m.set(p.competency_id, a); });
-    return [...m.entries()].map(([cid, items]) => ({ cid, name: compName(cid), items }));
-  }, [planItems, comps]);
-  const allConfirmed = planItems.length > 0 && planItems.every((p) => p.status === 'confirmed');
-
   const progress = useMemo(() => {
     if (liveComps.length === 0) return 0;
     // Distance to the bar per competency: level 1 (no knowledge) = 0%, the required level = 100%.
@@ -412,7 +591,8 @@ export default function ConsultantProfile() {
 
   async function generatePlan() {
     if (!assessment) return;
-    setPlanning(true); setError(null);
+    setPlanning(true); setBuilding(true); setPlanDone(false); setError(null);
+    const started = Date.now();
     const rows: Array<Record<string, unknown>> = [];
     let order = 0;
     applicable.forEach((c) => {
@@ -436,29 +616,10 @@ export default function ConsultantProfile() {
     await supabase.from('plan_items').delete().eq('assessment_id', assessment.id);
     if (rows.length) { const { error } = await supabase.from('plan_items').insert(rows); if (error) setError(error.message); }
     await supabase.from('assessments').update({ status: 'plan_review' }).eq('id', assessment.id);
-    setPlanning(false); await load();
-  }
-
-  async function markDelivered(item: PlanItem) {
-    const { error } = await supabase.from('plan_items').update({ status: 'training_done' }).eq('id', item.id);
-    if (error) setError(error.message);
-    load();
-  }
-
-  async function confirmMove(item: PlanItem, level: number) {
-    if (!assessment) return;
-    const e1 = (await supabase.from('assessment_scores').upsert([{ assessment_id: assessment.id, competency_id: item.competency_id, validated_level: level }], { onConflict: 'assessment_id,competency_id' })).error;
-    const e2 = (await supabase.from('plan_items').update({ status: 'confirmed', outcome_level: level }).eq('id', item.id)).error;
-    if (e1 || e2) setError((e1 || e2)!.message);
-    load();
-  }
-
-  async function markNuclearised() {
-    if (!assessment) return;
-    setSaving(true);
-    const { error } = await supabase.from('assessments').update({ status: 'delivered' }).eq('id', assessment.id);
-    if (error) setError(error.message);
-    setSaving(false); setModalStep(null); load();
+    await load();
+    const elapsed = Date.now() - started;
+    if (elapsed < 1900) await new Promise((r) => setTimeout(r, 1900 - elapsed));
+    setPlanning(false); setBuilding(false); setPlanDone(true);
   }
 
   async function submitSelf() {
@@ -534,6 +695,7 @@ export default function ConsultantProfile() {
   if (!consultant) return <div className="card"><p className="muted" style={{ padding: 16 }}>Consultant not found. <Link to="/consultants">Back to consultants</Link></p></div>;
 
   const skills = consultant.engineering_skills ?? [];
+  const firstName = consultant.first_name || consultant.full_name?.split(' ')[0] || 'this consultant';
 
   return (
     <div className="profile">
@@ -616,7 +778,10 @@ export default function ConsultantProfile() {
           )}
         </div>
         <div className="card gantt-card">
-          <h2>Training plan</h2>
+          <div className="gantt-head">
+            <h2>Training plan</h2>
+            {isStaff && planForGantt.length > 0 && <button className="btn btn-sm" onClick={() => setEditorOpen(true)}>Edit</button>}
+          </div>
           {planForGantt.length ? <Gantt trainings={planForGantt} /> : (
             <EmptyViz title="No plan yet" hint="The plan is generated at the Plan step once levels are validated." />
           )}
@@ -841,65 +1006,36 @@ export default function ConsultantProfile() {
         </div>
       )}
 
-      {/* Plan + delivery loop */}
+      {/* Plan: build animation, then complete + refine */}
       {modalStep === 3 && (
-        <div className="modal-overlay" onClick={() => setModalStep(null)}>
-          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h2>Plan</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
+        <div className="modal-overlay" onClick={() => !building && setModalStep(null)}>
+          <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Plan</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close" disabled={building}>×</button></div>
             <div className="modal-step">
               {!isStaff ? (
-                <p className="muted">Your Technical Director builds and runs your training plan. You'll see it fill in on your profile as trainings are completed and confirmed.</p>
+                <p className="muted">Your Technical Director builds and runs your training plan. It appears on your profile and fills in as trainings are completed and confirmed.</p>
               ) : !assessment ? (
                 <p className="muted">Earlier steps have to be completed first.</p>
-              ) : planItems.length === 0 ? (
-                <>
-                  <p className="muted">Build the training plan from the gap between each validated level and the role's required level, using the trainings on each competency's learning path. You can then run the loop below as trainings happen.</p>
-                  <button className="btn btn-primary btn-block" onClick={generatePlan} disabled={planning}>
-                    {planning ? 'Building the plan…' : 'Generate the plan'}
-                  </button>
-                </>
+              ) : applicable.length === 0 ? (
+                <p className="muted">No competencies in scope yet.</p>
+              ) : building ? (
+                <div className="nuke-anim">
+                  <div className="nuke-atom"><span /><span /><span /><i /></div>
+                  <p className="nuke-msg">Nuclearising {firstName}…</p>
+                  <p className="muted">Building the plan to close every gap to the required level.</p>
+                </div>
+              ) : (planItems.length > 0 || planDone) ? (
+                <div className="nuke-done">
+                  <div className="nuke-check">✓</div>
+                  <p className="nuke-msg">Nuclearisation plan complete</p>
+                  <p className="muted">{planItems.length} training{planItems.length === 1 ? '' : 's'} scheduled to take {firstName} to SQEP.</p>
+                  <button className="btn btn-primary btn-block" onClick={() => { setModalStep(null); setEditorOpen(true); }}>View and refine</button>
+                  <button className="link-btn" onClick={generatePlan} disabled={planning}>{planning ? 'Rebuilding…' : 'Regenerate from gaps'}</button>
+                </div>
               ) : (
                 <>
-                  <p className="muted">A training is an enabler, not a tick-box. Mark it delivered, then re-assess and confirm the level the consultant actually reached. The confirmed level is what moves the stars and fills the SQEPimeter.</p>
-                  <div className="plan-list">
-                    {planGroups.map((g) => (
-                      <div className="plan-group" key={g.cid}>
-                        <div className="sa-cat">{g.name}</div>
-                        {g.items.map((it) => {
-                          const label = (it.training_id ? trainingById[it.training_id]?.title : null) ?? it.title ?? 'Training';
-                          return (
-                            <div className={`plan-item ${it.status}`} key={it.id}>
-                              <div className="plan-item-main">
-                                <div className="plan-item-name">{label}</div>
-                                <div className="plan-item-meta">level {it.from_level} → {it.to_level}</div>
-                              </div>
-                              {it.status === 'planned' && (
-                                <button className="btn btn-sm" onClick={() => markDelivered(it)}>Mark delivered</button>
-                              )}
-                              {it.status === 'training_done' && (
-                                <div className="plan-reassess">
-                                  <span className="muted">Confirm level reached:</span>
-                                  <StarRating value={reassess[it.id] ?? it.to_level} onChange={(v) => setReassess((s) => ({ ...s, [it.id]: v }))} showLabel={false} size="sm" />
-                                  <button className="btn btn-sm btn-primary" onClick={() => confirmMove(it, reassess[it.id] ?? it.to_level)}>Confirm</button>
-                                </div>
-                              )}
-                              {it.status === 'confirmed' && (
-                                <span className="plan-confirmed">✓ confirmed at level {it.outcome_level}</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="plan-foot">
-                    <button className="link-btn" onClick={generatePlan} disabled={planning}>{planning ? 'Rebuilding…' : 'Regenerate plan'}</button>
-                    {allConfirmed && (
-                      <button className="btn btn-primary" onClick={markNuclearised} disabled={saving}>
-                        {saving ? 'Finishing…' : 'Mark fully nuclearised'}
-                      </button>
-                    )}
-                  </div>
+                  <p className="muted">Build the plan from the gap between each validated level and the role's required level, using the trainings on each competency's learning path.</p>
+                  <button className="btn btn-primary btn-block" onClick={generatePlan} disabled={planning}>Build plan</button>
                 </>
               )}
             </div>
@@ -914,6 +1050,19 @@ export default function ConsultantProfile() {
             <div className="modal-step"><p className="muted">{assessment?.status === 'delivered' ? 'This consultant is fully nuclearised for their role.' : 'Reached once the plan is complete and every level is confirmed.'}</p></div>
           </div>
         </div>
+      )}
+
+      {editorOpen && assessment && (
+        <PlanEditor
+          assessmentId={assessment.id}
+          horizon={assessment.horizon_months ?? 18}
+          comps={comps}
+          applicable={applicable}
+          trainings={trainings}
+          trainingById={trainingById}
+          initialItems={planItems}
+          onClose={() => { setEditorOpen(false); load(); }}
+        />
       )}
 
       {needsSelf && modalStep !== 1 && (
