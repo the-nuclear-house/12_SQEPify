@@ -1669,3 +1669,30 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 
 /* Inactive back-office rows */
 .dash-row.is-inactive { opacity: 0.6; }
+
+/* Gantt v2: per-competency lanes, baseline line, milestone diamonds */
+.gantt2 { margin-top: 6px; }
+.gantt2-scroll { overflow-x: auto; }
+.gantt2-grid { min-width: 520px; }
+.gantt2-axis { position: relative; height: 20px; margin-left: 150px; border-bottom: 1px solid var(--border-soft); }
+.gantt2-tick { position: absolute; transform: translateX(-50%); font-size: 10px; font-family: var(--font-mono); color: var(--text-faint); }
+.gantt2-lane { display: grid; grid-template-columns: 150px 1fr; align-items: center; height: 40px; }
+.gantt2-lane-name { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
+.gantt2-track { position: relative; height: 100%; }
+.gantt2-baseline { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border); }
+.gantt2-span { position: absolute; top: 50%; transform: translateY(-50%); height: 3px; border-radius: 2px; background: var(--surface-3); }
+.gantt2-diamond {
+  position: absolute; top: 50%; width: 13px; height: 13px; padding: 0; border: 0;
+  transform: translate(-50%, -50%) rotate(45deg); cursor: pointer;
+  background: var(--surface-3); box-shadow: inset 0 0 0 1.5px var(--text-faint);
+}
+.gantt2-diamond.in_progress { background: var(--brand-cyan); box-shadow: none; }
+.gantt2-diamond.done { background: var(--brand-green); box-shadow: none; }
+.gantt2-diamond.sel { outline: 2px solid var(--text); outline-offset: 2px; }
+.gantt2-diamond:hover { filter: brightness(1.15); }
+.gantt2-detail {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px;
+  padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.gantt2-detail-name { font-size: 13px; font-weight: 600; }
+.gantt2-detail-sub { font-size: 12px; color: var(--text-muted); }

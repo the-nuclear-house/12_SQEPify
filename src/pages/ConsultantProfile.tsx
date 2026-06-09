@@ -117,23 +117,62 @@ function Radar({ comps, onAxisClick }: { comps: CompetencyScore[]; onAxisClick?:
 
 // ---------------- Gantt ----------------
 function Gantt({ trainings }: { trainings: PlannedTraining[] }) {
-  const total = Math.max(12, ...trainings.map((t) => t.startMonth + t.durationMonths));
+  const [sel, setSel] = useState<string | null>(null);
+  const total = Math.max(6, ...trainings.map((t) => t.startMonth + t.durationMonths));
   const months = Array.from({ length: total }, (_, i) => i);
-  const pct = (m: number) => (m / total) * 100;
+  const pos = (m: number) => ((m + 0.5) / total) * 100;
+
+  // One lane per competency; diamonds are the training milestones along it.
+  const lanes = useMemo(() => {
+    const m = new Map<string, PlannedTraining[]>();
+    trainings.forEach((t) => { const a = m.get(t.competency) ?? []; a.push(t); m.set(t.competency, a); });
+    return [...m.entries()].map(([competency, items]) => ({ competency, items: items.sort((a, b) => a.startMonth - b.startMonth) }));
+  }, [trainings]);
+
+  const selected = trainings.find((t) => t.id === sel) ?? null;
+  const statusLabel = (s: string) => (s === 'done' ? 'Confirmed' : s === 'in_progress' ? 'Training delivered' : 'Planned');
+
   return (
-    <div className="gantt">
-      <div className="gantt-axis">
-        {months.map((m) => (<div key={m} className="gantt-tick" style={{ left: `${pct(m)}%` }}><span>M{m + 1}</span></div>))}
-      </div>
-      <div className="gantt-rows">
-        {trainings.map((t) => (
-          <div key={t.id} className="gantt-row">
-            <div className={`gantt-bar ${t.status}`} style={{ left: `${pct(t.startMonth)}%`, width: `${pct(t.durationMonths)}%` }} title={`${t.name} (${t.fromLevel} to ${t.toLevel} stars)`}>
-              <span>{t.name}</span>
-            </div>
+    <div className="gantt2">
+      <div className="gantt2-scroll">
+        <div className="gantt2-grid">
+          <div className="gantt2-axis">
+            {months.map((m) => (<span key={m} className="gantt2-tick" style={{ left: `${pos(m)}%` }}>M{m + 1}</span>))}
           </div>
-        ))}
+          {lanes.map((lane) => {
+            const first = pos(lane.items[0].startMonth);
+            const last = pos(lane.items[lane.items.length - 1].startMonth);
+            return (
+              <div className="gantt2-lane" key={lane.competency}>
+                <div className="gantt2-lane-name" title={lane.competency}>{lane.competency}</div>
+                <div className="gantt2-track">
+                  <span className="gantt2-baseline" />
+                  {lane.items.length > 1 && <span className="gantt2-span" style={{ left: `${first}%`, width: `${last - first}%` }} />}
+                  {lane.items.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`gantt2-diamond ${t.status}${sel === t.id ? ' sel' : ''}`}
+                      style={{ left: `${pos(t.startMonth)}%` }}
+                      title={`${t.name} · M${t.startMonth + 1}`}
+                      onClick={() => setSel(sel === t.id ? null : t.id)}
+                      aria-label={t.name}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+      {selected && (
+        <div className="gantt2-detail">
+          <div className="gantt2-detail-main">
+            <div className="gantt2-detail-name">{selected.name}</div>
+            <div className="gantt2-detail-sub">{selected.competency} · level {selected.fromLevel} → {selected.toLevel} · month {selected.startMonth + 1}</div>
+          </div>
+          <span className={`stage-pill ${selected.status === 'done' ? 'st-done' : selected.status === 'in_progress' ? 'st-self' : 'st-setup'}`}>{statusLabel(selected.status)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -590,6 +629,10 @@ export default function ConsultantProfile() {
           <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>Set-up</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
 
+            {!isStaff ? (
+              <div className="modal-step"><p className="muted">Your Technical Director sets up your assessment. There's nothing for you to do here.</p></div>
+            ) : (
+            <>
             <div className="wiz-steps">
               {['Roles', 'CV assessment', 'Hand over'].map((l, i) => (
                 <div className={`wiz-step ${i === setupWiz ? 'current' : i < setupWiz ? 'done' : ''}`} key={l}>
@@ -706,6 +749,8 @@ export default function ConsultantProfile() {
                 </>
               )}
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
