@@ -21,25 +21,23 @@ function stepIndex(status: Assessment['status'] | null): number {
     case 'validation': return 2;
     case 'planning': return 3;
     case 'plan_review':
-    case 'delivered': return 3;
+    case 'delivered': return 4;
     default: return 0;
   }
 }
 
-// ---------------- Filling figure ----------------
+// ---------------- Filling figure: a hard-hat worker that fills like a meter ----------------
 function Figure({ progress, full }: { progress: number; full: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id); }, []);
-  const top = 24, bottom = 308, height = bottom - top;
+  const top = 66, bottom = 346, height = bottom - top;
   const waterline = bottom - progress * height;
-  const BODY = 'M80,88 C66,92 58,104 54,120 C40,150 30,235 28,294 Q27,308 41,308 L159,308 Q173,308 172,294 C170,235 160,150 146,120 C142,104 134,92 120,88 Q100,84 80,88 Z';
+  const BODY = 'M88,124 C88,134 84,140 78,144 C62,150 50,164 48,184 C46,210 50,300 50,330 Q50,346 66,346 L134,346 Q150,346 150,330 C150,300 154,210 152,184 C150,164 138,150 122,144 C116,140 112,134 112,124 Z';
+  const HAT = 'M64,72 Q64,42 100,42 Q136,42 136,72 Z';
   return (
-    <svg className="fig-svg" viewBox="0 0 200 346" xmlns="http://www.w3.org/2000/svg">
+    <svg className="fig-svg" viewBox="0 0 200 372" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <clipPath id="figClip">
-          <circle cx="100" cy="54" r="28" />
-          <path d={BODY} />
-        </clipPath>
+        <clipPath id="figClip"><circle cx="100" cy="98" r="30" /><path d={BODY} /></clipPath>
         <linearGradient id="figWater" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#36d3c4" /><stop offset="100%" stopColor="#84c341" />
         </linearGradient>
@@ -48,22 +46,27 @@ function Figure({ progress, full }: { progress: number; full: boolean }) {
         </filter>
       </defs>
       <g clipPath="url(#figClip)">
-        <rect width="200" height="346" fill="#161e29" />
+        <rect width="200" height="372" fill="#161e29" />
         <g style={{ transform: mounted ? 'translateY(0)' : `translateY(${height}px)`, transition: 'transform 1.7s cubic-bezier(.22,.61,.36,1)' }}>
-          <rect x="0" y={waterline} width="200" height={bottom - waterline + 60} fill="url(#figWater)" opacity="0.9" />
-          <path className="wave wave-a" d={`M0,${waterline} q25,-9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V346 H0 Z`} fill="#36d3c4" opacity="0.45" />
-          <path className="wave wave-b" d={`M0,${waterline + 4} q25,9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V346 H0 Z`} fill="#84c341" opacity="0.30" />
+          <rect x="0" y={waterline} width="200" height={372 - waterline} fill="url(#figWater)" opacity="0.92" />
+          <path className="wave wave-a" d={`M0,${waterline} q25,-9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V372 H0 Z`} fill="#36d3c4" opacity="0.45" />
+          <path className="wave wave-b" d={`M0,${waterline + 4} q25,9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V372 H0 Z`} fill="#84c341" opacity="0.30" />
         </g>
       </g>
-      <g fill="none" stroke="#36d3c4" strokeWidth="3" strokeLinejoin="round" opacity={full ? 0.95 : 0.7} filter={full ? 'url(#figGlow)' : undefined}>
-        <circle cx="100" cy="54" r="28" />
+      <g fill="none" stroke="#36d3c4" strokeWidth="3" strokeLinejoin="round" opacity={full ? 0.95 : 0.78} filter={full ? 'url(#figGlow)' : undefined}>
+        <circle cx="100" cy="98" r="30" />
         <path d={BODY} />
       </g>
-      <g transform="translate(100,210)" fill="none" stroke="#cdefff" strokeWidth="1.7" opacity="0.85">
-        <ellipse rx="23" ry="9" />
-        <ellipse rx="23" ry="9" transform="rotate(60)" />
-        <ellipse rx="23" ry="9" transform="rotate(120)" />
-        <circle r="2.8" fill="#cdefff" stroke="none" />
+      <g fill="none" stroke="#9fe6ff" strokeWidth="3" strokeLinejoin="round" opacity="0.9">
+        <path d={HAT} />
+        <ellipse cx="100" cy="72" rx="46" ry="7" />
+        <line x1="100" y1="42" x2="100" y2="66" />
+      </g>
+      <g transform="translate(100,250)" fill="none" stroke="#eafff7" strokeWidth="1.8" opacity="0.9">
+        <ellipse rx="22" ry="8.5" />
+        <ellipse rx="22" ry="8.5" transform="rotate(60)" />
+        <ellipse rx="22" ry="8.5" transform="rotate(120)" />
+        <circle r="2.6" fill="#eafff7" stroke="none" />
       </g>
     </svg>
   );
