@@ -8,7 +8,7 @@ import FileDropzone from '../components/FileDropzone';
 import type {
   Consultant, Role, Assessment, AssessmentRole, AssessmentScore,
   Competency, CompetencyCategory, CompetencySubcategory, RoleCompetency,
-  CompetencyLevelTraining, PlanItem, Training,
+  CompetencyLevelTraining, CompetencyLevelPath, PlanItem, Training,
   CompetencyScore, PlannedTraining,
 } from '../lib/types';
 
@@ -73,19 +73,100 @@ function Figure({ progress, full }: { progress: number; full: boolean }) {
 }
 
 // ---------------- Radar ----------------
-function LevelBars({ items }: { items: CompetencyScore[] }) {
+function LevelBars({ items, onSelect }: { items: { id: string; competency: string; current: number; target: number }[]; onSelect?: (it: { id: string; competency: string; current: number; target: number }) => void }) {
   return (
     <div className="lvlbars">
       {items.map((it) => (
-        <div className="lvlbar" key={it.competency}>
+        <button type="button" className={`lvlbar${onSelect ? ' clickable' : ''}`} key={it.id} onClick={onSelect ? () => onSelect(it) : undefined}>
           <div className="lvlbar-name" title={it.competency}>{it.competency}</div>
           <div className="lvlbar-track">
             <span className="lvlbar-fill" style={{ width: `${(Math.max(0, it.current) / 5) * 100}%` }} />
             <span className="lvlbar-target" style={{ left: `${(it.target / 5) * 100}%` }} title={`Target: level ${it.target}`} />
           </div>
           <div className="lvlbar-val">{Math.round(it.current)} <span className="muted">/ {it.target}</span></div>
-        </div>
+        </button>
       ))}
+    </div>
+  );
+}
+
+const LP_LABELS: Record<number, string> = { 1: 'No knowledge', 2: 'Awareness', 3: 'Basic competence', 4: 'Full competence (SQEP)', 5: 'Expert' };
+
+function LearningPathModal({ comp, clts, trainingById, planItems, assessmentId, isStaff, onChanged, onClose }: {
+  comp: { id: string; competency: string; current: number; target: number };
+  clts: CompetencyLevelTraining[];
+  trainingById: Record<string, Training>;
+  planItems: PlanItem[];
+  assessmentId: string | null;
+  isStaff: boolean;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [paths, setPaths] = useState<CompetencyLevelPath[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('competency_level_paths').select('*').eq('competency_id', comp.id);
+      setPaths((data as CompetencyLevelPath[]) ?? []);
+      setLoading(false);
+    })();
+  }, [comp.id]);
+
+  const inPlan = (tid: string) => planItems.some((p) => p.competency_id === comp.id && p.training_id === tid);
+  async function addToPlan(tid: string, level: number) {
+    if (!assessmentId) return;
+    setBusy(tid);
+    await supabase.from('plan_items').insert({ assessment_id: assessmentId, competency_id: comp.id, training_id: tid, from_level: level - 1, to_level: level, start_month: 0, duration_months: 1, status: 'planned', sort_order: planItems.length });
+    setBusy(null);
+    onChanged();
+  }
+
+  const levels: number[] = [];
+  for (let L = 2; L <= comp.target; L++) levels.push(L);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>{comp.competency}</h2><button className="modal-close" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="modal-step">
+          <p className="muted">The path to the required level, {LP_LABELS[comp.target]}. Currently at {LP_LABELS[comp.current] ?? 'not assessed'}.</p>
+          {loading ? <p className="muted">Loading…</p> : (
+            <div className="lp-levels">
+              {levels.map((L) => {
+                const p = paths.find((x) => x.level === L);
+                const trs = clts.filter((x) => x.competency_id === comp.id && x.level === L);
+                return (
+                  <div className={`lp-level${comp.current >= L ? ' reached' : ''}`} key={L}>
+                    <div className="lp-level-head">
+                      <span className="lp-level-num">{L}</span>
+                      <span className="lp-level-label">{LP_LABELS[L]}</span>
+                      {comp.current >= L && <span className="lp-reached">✓ reached</span>}
+                    </div>
+                    {p?.actions && <p className="lp-actions">{p.actions}</p>}
+                    {p?.verification && <p className="lp-verify"><span className="muted">Verified by:</span> {p.verification}</p>}
+                    {trs.length === 0 ? <p className="muted lp-none">No trainings defined for this level.</p> : (
+                      <div className="lp-trainings">
+                        {trs.map((t) => {
+                          const inp = inPlan(t.training_id);
+                          return (
+                            <div className={`lp-training${inp ? ' in' : ''}`} key={t.training_id}>
+                              <span>{trainingById[t.training_id]?.title ?? 'Training'}</span>
+                              {inp ? <span className="lp-pill in">In plan</span>
+                                : isStaff && assessmentId ? <button className="lp-pill add" onClick={() => addToPlan(t.training_id, L)} disabled={busy === t.training_id}>{busy === t.training_id ? 'Adding…' : '+ Add to plan'}</button>
+                                : <span className="lp-pill out">Not in plan</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -403,6 +484,7 @@ export default function ConsultantProfile() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [rolesEdit, setRolesEdit] = useState(false);
   const [editSel, setEditSel] = useState<string[]>([]);
+  const [pathComp, setPathComp] = useState<{ id: string; competency: string; current: number; target: number } | null>(null);
   const [cvRunning, setCvRunning] = useState(false);
   const [cvMsg, setCvMsg] = useState<string | null>(null);
   const [setupWiz, setSetupWiz] = useState(0);
@@ -511,8 +593,8 @@ export default function ConsultantProfile() {
   }, [liveComps]);
 
   // Competencies within a drilled-into category.
-  const drillData: CompetencyScore[] = useMemo(
-    () => (drillCat ? liveComps.filter((c) => c.category === drillCat).map((c) => ({ competency: c.name, current: c.current, target: c.required })) : []),
+  const drillData = useMemo(
+    () => (drillCat ? liveComps.filter((c) => c.category === drillCat).map((c) => ({ id: c.id, competency: c.name, current: c.current, target: c.required })) : []),
     [drillCat, liveComps],
   );
   const atRequired = useMemo(() => liveComps.filter((c) => c.required > 0 && c.current >= c.required).length, [liveComps]);
@@ -772,13 +854,13 @@ export default function ConsultantProfile() {
             {hasScores && !drillCat && <p className="muted radar-roles">Click a category to see its competencies.</p>}
             {hasScores ? (
               <>
-                {drillCat && drillData.length < 3 ? (
-                  <LevelBars items={drillData} />
+                {drillCat ? (
+                  <LevelBars items={drillData} onSelect={(it) => setPathComp(it)} />
                 ) : (
                   <Radar
-                    key={drillCat ?? 'all'}
-                    comps={drillCat ? drillData : radarData}
-                    onAxisClick={drillCat ? undefined : (label) => setDrillCat(label)}
+                    key="all"
+                    comps={radarData}
+                    onAxisClick={(label) => setDrillCat(label)}
                   />
                 )}
                 <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
@@ -1099,6 +1181,19 @@ export default function ConsultantProfile() {
             <div className="modal-step"><p className="muted">{assessment?.status === 'delivered' ? 'This consultant is fully nuclearised for their role.' : 'Reached once the plan is complete and every level is confirmed.'}</p></div>
           </div>
         </div>
+      )}
+
+      {pathComp && (
+        <LearningPathModal
+          comp={pathComp}
+          clts={clts}
+          trainingById={trainingById}
+          planItems={planItems}
+          assessmentId={assessment?.id ?? null}
+          isStaff={isStaff}
+          onChanged={() => { load(); }}
+          onClose={() => setPathComp(null)}
+        />
       )}
 
       {rolesEdit && (
