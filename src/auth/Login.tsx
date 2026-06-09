@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import { isSupabaseConfigured } from '../lib/supabase';
 import Logo from '../components/Logo';
 
-const TEST_LOGIN = import.meta.env.VITE_ENABLE_TEST_LOGIN === 'true';
+const TEST_LOGIN = ['true', '1', 'yes', 'on'].includes((import.meta.env.VITE_ENABLE_TEST_LOGIN ?? '').toString().trim().toLowerCase());
 
 // Test personas (created by docs/test-users.sql, password 123456). Temporary; remove before launch.
 const PERSONAS = [
@@ -14,7 +15,7 @@ const PERSONAS = [
 ];
 
 export default function Login() {
-  const { signIn, signInWithEmail } = useAuth();
+  const { signIn, signInWithEmail, session } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,6 +36,9 @@ export default function Login() {
     if (error) setError(error);
     setBusy(false);
   }
+
+  // Once a session exists (password or SSO), leave the login screen.
+  if (session) return <Navigate to="/" replace />;
 
   return (
     <div className="centre">
