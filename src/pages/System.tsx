@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import Card from '../components/Card';
+import UserManagement from '../components/UserManagement';
 
 interface SyncResult {
   ok?: boolean;
@@ -115,14 +116,7 @@ export default function System() {
         {result?.error && <p className="sync-msg err">Sync failed: {result.error}</p>}
       </Card>
 
-      <Card title="User management">
-        <p className="muted">
-          Creating users and assigning roles through this screen comes in a later step.
-          For now, users are seeded directly in the database, as recorded in the
-          changelog.
-        </p>
-        <span className="stub-note">build order, later step</span>
-      </Card>
+      <UserManagement />
     </div>
   );
 }
