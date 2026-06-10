@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
@@ -447,14 +447,16 @@ function Gantt({ trainings, minMonths = 12, canReassess, onReassess, onHistory, 
                   <span className="gantt2-baseline" />
                   {lane.items.length > 1 && <span className="gantt2-span" style={{ left: `${first}%`, width: `${last - first}%` }} />}
                   {lane.items.map((t) => (
-                    <button
-                      key={t.id}
-                      className={`gantt2-diamond ${t.status}${sel === t.id ? ' sel' : ''}`}
-                      style={{ left: `${pos(t.startMonth)}%` }}
-                      title={`${t.name} · M${t.startMonth + 1}`}
-                      onClick={() => setSel(sel === t.id ? null : t.id)}
-                      aria-label={t.name}
-                    />
+                    <Fragment key={t.id}>
+                      <span className="gantt2-target" style={{ left: `${pos(t.startMonth)}%` }} title={`Reaches level ${t.toLevel}`}>★{t.toLevel}</span>
+                      <button
+                        className={`gantt2-diamond ${t.status}${sel === t.id ? ' sel' : ''}`}
+                        style={{ left: `${pos(t.startMonth)}%` }}
+                        title={`${t.name} · reaches level ${t.toLevel} · M${t.startMonth + 1}`}
+                        onClick={() => setSel(sel === t.id ? null : t.id)}
+                        aria-label={t.name}
+                      />
+                    </Fragment>
                   ))}
                 </div>
               </div>
@@ -466,7 +468,7 @@ function Gantt({ trainings, minMonths = 12, canReassess, onReassess, onHistory, 
         <div className="gantt2-detail">
           <div className="gantt2-detail-main">
             <div className="gantt2-detail-name">{selected.name}</div>
-            <div className="gantt2-detail-sub">{selected.competency} · month {selected.startMonth + 1}</div>
+            <div className="gantt2-detail-sub">{selected.competency} · takes them to level {selected.toLevel} · month {selected.startMonth + 1}</div>
           </div>
           <span className={`stage-pill ${selected.status === 'done' ? 'st-done' : selected.status === 'in_progress' ? 'st-self' : 'st-setup'}`}>{statusLabel(selected.status)}</span>
           {selected.status === 'in_progress' && canReassess && <button className="btn btn-sm btn-primary" onClick={() => onReassess?.(selected.id)}>Reassess</button>}
@@ -865,13 +867,10 @@ export default function ConsultantProfile() {
   const planForGantt: PlannedTraining[] = useMemo(() => planItems.map((p) => {
     const isMissing = p.kind === 'missing';
     const trainingTitle = p.training_id ? trainingById[p.training_id]?.title : null;
-    const lane = isMissing
-      ? `Training Missing · ${compName(p.competency_id)} (L${p.from_level}\u2192${p.to_level})`
-      : (trainingTitle ?? p.title ?? 'Training');
     return {
       id: p.id,
-      name: isMissing ? 'Training Missing' : (trainingTitle ?? 'Training'),
-      competency: lane,
+      name: isMissing ? 'Training missing' : (trainingTitle ?? p.title ?? 'Training'),
+      competency: compName(p.competency_id),
       fromLevel: p.from_level,
       toLevel: p.to_level,
       startMonth: p.start_month ?? 0,
@@ -883,9 +882,12 @@ export default function ConsultantProfile() {
   const reassessData = useMemo(() => {
     if (!reassessId) return null;
     const pi = planItems.find((p) => p.id === reassessId);
-    if (!pi || !pi.training_id) return null;
-    const addressed = new Set(clts.filter((x) => x.training_id === pi.training_id).map((x) => x.competency_id));
-    const cs = applicable.filter((c) => addressed.has(c.id)).map((c) => {
+    if (!pi) return null;
+    // Each diamond is one competency/level step, so reassess that competency.
+    const ids = pi.competency_id
+      ? [pi.competency_id]
+      : (pi.training_id ? clts.filter((x) => x.training_id === pi.training_id).map((x) => x.competency_id) : []);
+    const cs = applicable.filter((c) => ids.includes(c.id)).map((c) => {
       const sc = scoreByComp[c.id];
       return { id: c.id, name: c.name, current: sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0, required: c.required };
     });
@@ -1029,26 +1031,32 @@ export default function ConsultantProfile() {
     setPlanning(true); setBuilding(true); setPlanDone(false); setError(null);
     const started = Date.now();
     const horizon = assessment.horizon_months ?? 18;
-    // A diamond is a training occurrence, so collapse all gaps to the distinct trainings needed.
-    const needed = new Set<string>();
-    const missing: Array<{ competency_id: string; level: number }> = [];
+    const spacing = 2; // months between consecutive steps within a competency
+    // Build a stepwise roadmap per competency: one diamond for each level from the
+    // current level up to the required level, in order, each tied to the training that reaches it.
+    const rows: Array<Record<string, unknown>> = [];
+    let order = 0;
     applicable.forEach((c) => {
       const sc = scoreByComp[c.id];
       const cur = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0;
+      let step = 0;
       for (let L = Math.max(cur + 1, 2); L <= c.required; L++) {
-        const trs = clts.filter((x) => x.competency_id === c.id && x.level === L);
-        if (trs.length === 0) missing.push({ competency_id: c.id, level: L });
-        else trs.forEach((t) => needed.add(t.training_id));
+        const tr = clts.find((x) => x.competency_id === c.id && x.level === L);
+        const startMonth = Math.min(step * spacing, horizon - 1);
+        rows.push({
+          assessment_id: assessment.id,
+          kind: tr ? 'training' : 'missing',
+          training_id: tr ? tr.training_id : null,
+          competency_id: c.id,
+          from_level: L - 1,
+          to_level: L,
+          start_month: startMonth,
+          duration_months: 1,
+          status: 'planned',
+          sort_order: order++,
+        });
+        step++;
       }
-    });
-    const rows: Array<Record<string, unknown>> = [];
-    let order = 0; let month = 0;
-    [...needed].forEach((tid) => {
-      rows.push({ assessment_id: assessment.id, kind: 'training', training_id: tid, competency_id: null, from_level: 0, to_level: 0, start_month: Math.min(month, horizon - 1), duration_months: 1, status: 'planned', sort_order: order++ });
-      month += 1;
-    });
-    missing.forEach((m) => {
-      rows.push({ assessment_id: assessment.id, kind: 'missing', training_id: null, competency_id: m.competency_id, from_level: m.level - 1, to_level: m.level, start_month: null, duration_months: 1, status: 'planned', sort_order: order++ });
     });
     await supabase.from('plan_items').delete().eq('assessment_id', assessment.id);
     if (rows.length) { const { error } = await supabase.from('plan_items').insert(rows); if (error) setError(error.message); }
