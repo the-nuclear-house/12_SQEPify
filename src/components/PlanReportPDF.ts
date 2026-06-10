@@ -10,7 +10,7 @@ import { LOGO_BASE64 } from './logoData';
 */
 
 type RGB = [number, number, number];
-const NAVY: RGB = [15, 23, 42], CYAN: RGB = [6, 182, 212], WHITE: RGB = [255, 255, 255],
+const NAVY: RGB = [15, 23, 42], CYAN: RGB = [6, 182, 212],
   LGREY: RGB = [148, 163, 184], MGREY: RGB = [85, 100, 120], BODY: RGB = [50, 60, 75],
   LINE: RGB = [222, 228, 236], GOLD: RGB = [200, 150, 30], GREEN: RGB = [110, 170, 60],
   CYAN_D: RGB = [6, 182, 212], DANGER: RGB = [207, 90, 10], FAINT: RGB = [120, 135, 150];
@@ -39,6 +39,14 @@ export interface PlanReportLane {
   name: string;
   steps: PlanReportStep[];
 }
+export interface ProfileAxis { axis: string; current: number; required: number }
+export interface ProfileGap { name: string; current: number; required: number }
+export interface PlanReportProfile {
+  radar: ProfileAxis[];
+  gaps: ProfileGap[];
+  atRequired: number;
+  total: number;
+}
 
 function wrap(doc: jsPDF, t: string, w: number): string[] { return t ? (doc.splitTextToSize(t, w) as string[]) : []; }
 
@@ -58,6 +66,38 @@ function drawDiamond(doc: jsPDF, cx: number, cy: number, r: number, opts: { fill
     doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...(opts.stroke ?? DANGER)); doc.setLineWidth(0.5);
     doc.lines(segs, cx, cy - r, [1, 1], 'S', true); doc.setLineDashPattern([], 0);
   } else { doc.setFillColor(...(opts.fill ?? CYAN_D)); doc.lines(segs, cx, cy - r, [1, 1], 'F', true); }
+}
+
+function trunc(s: string, n: number): string { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+function poly(doc: jsPDF, pts: [number, number][], style: string) {
+  const segs: [number, number][] = [];
+  for (let i = 1; i < pts.length; i++) segs.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+  doc.lines(segs, pts[0][0], pts[0][1], [1, 1], style, true);
+}
+
+function drawRadar(doc: jsPDF, cx: number, cy: number, R: number, axes: ProfileAxis[]) {
+  const N = axes.length;
+  const pt = (i: number, level: number): [number, number] => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / N; const r = (level / 5) * R;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  };
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.2);
+  for (let g = 1; g <= 5; g++) poly(doc, axes.map((_, i) => pt(i, g)), 'S');
+  axes.forEach((_, i) => { const [x, y] = pt(i, 5); doc.line(cx, cy, x, y); });
+  doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(...GOLD); doc.setLineWidth(0.7);
+  poly(doc, axes.map((a, i) => pt(i, a.required)), 'S'); doc.setLineDashPattern([], 0);
+  const cur = axes.map((a, i) => pt(i, a.current));
+  try { doc.saveGraphicsState(); (doc as any).setGState(new (doc as any).GState({ opacity: 0.2 })); doc.setFillColor(...CYAN_D); poly(doc, cur, 'F'); doc.restoreGraphicsState(); } catch { /* opacity is best-effort */ }
+  doc.setDrawColor(...CYAN_D); doc.setLineWidth(1.2); poly(doc, cur, 'S');
+  cur.forEach(([x, y]) => { doc.setFillColor(...CYAN_D); doc.circle(x, y, 0.8, 'F'); });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...MGREY);
+  axes.forEach((a, i) => {
+    const ang = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+    const lx = cx + (R + 5) * Math.cos(ang), ly = cy + (R + 5) * Math.sin(ang);
+    const align = lx < cx - 2 ? 'right' : lx > cx + 2 ? 'left' : 'center';
+    doc.text(trunc(a.axis, 18), lx, ly, { align: align as any });
+  });
 }
 
 function header(doc: jsPDF, meta: PlanReportMeta) {
@@ -87,7 +127,7 @@ function sectionHeading(doc: jsPDF, y: number, text: string): number {
   return y + 5;
 }
 
-export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null, lanes: PlanReportLane[]): jsPDF {
+export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null, profile: PlanReportProfile, lanes: PlanReportLane[]): jsPDF {
   const doc = new jsPDF('l', 'mm', 'a4');
   let page = 1; header(doc, meta); footer(doc, page);
 
@@ -108,6 +148,58 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
     y += 4;
   }
 
+  // Competency profile: category radar (current vs required) on the left, gaps on the right.
+  y = sectionHeading(doc, y, 'Competency profile');
+  const profTop = y;
+  if (profile.radar.length >= 3) {
+    const cx = MARGIN + 44, cy = profTop + 42, R = 34;
+    drawRadar(doc, cx, cy, R, profile.radar);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...MGREY);
+    doc.setDrawColor(...CYAN_D); doc.setLineWidth(1.2); doc.line(MARGIN, cy + R + 16, MARGIN + 6, cy + R + 16);
+    doc.text('Current', MARGIN + 8, cy + R + 17);
+    doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(...GOLD); doc.line(MARGIN + 30, cy + R + 16, MARGIN + 36, cy + R + 16); doc.setLineDashPattern([], 0);
+    doc.text('Required', MARGIN + 38, cy + R + 17);
+  }
+  let gy = profTop + 1;
+  const gx = MARGIN + 100;
+  const gW = PW - MARGIN - gx;
+  const TRACK: RGB = [233, 237, 242];
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
+  doc.text('Current levels and gaps', gx, gy); gy += 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MGREY);
+  doc.text(`${profile.atRequired} of ${profile.total} competencies are at the required level.`, gx, gy); gy += 8;
+  if (profile.gaps.length === 0) {
+    doc.setTextColor(...GREEN); doc.text('No gaps remain against the required levels.', gx, gy); gy += 6;
+  } else {
+    const show = profile.gaps.slice(0, 6);
+    show.forEach((g) => {
+      // name + the shortfall, on one line
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NAVY);
+      doc.text(trunc(g.name, 52), gx, gy);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MGREY);
+      doc.text(`${LEVELS[g.current]} to ${LEVELS[g.required]}`, PW - MARGIN, gy, { align: 'right' });
+      gy += 2.6;
+      // level bar: 0..5 scale, cyan fill to current, gold dashed marker at required
+      const barH = 3.2;
+      doc.setFillColor(...TRACK); doc.roundedRect(gx, gy, gW, barH, 1, 1, 'F');
+      const cw = Math.max(0, Math.min(1, g.current / 5)) * gW;
+      if (cw > 0) { doc.setFillColor(...CYAN_D); doc.roundedRect(gx, gy, cw, barH, 1, 1, 'F'); }
+      const rx = gx + Math.min(1, g.required / 5) * gW;
+      doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.setLineWidth(0.7);
+      doc.line(rx, gy - 1, rx, gy + barH + 1); doc.setLineDashPattern([], 0);
+      gy += barH + 6.5;
+    });
+    if (profile.gaps.length > show.length) { doc.setTextColor(...MGREY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(`and ${profile.gaps.length - show.length} more below the required level`, gx, gy); gy += 5; }
+    // bar legend
+    doc.setFontSize(6.5); doc.setTextColor(...MGREY);
+    doc.setFillColor(...CYAN_D); doc.roundedRect(gx, gy - 2, 5, 2.4, 0.6, 0.6, 'F'); doc.text('Current level', gx + 7, gy);
+    doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.line(gx + 36, gy - 2.4, gx + 36, gy + 0.6); doc.setLineDashPattern([], 0);
+    doc.text('Required level', gx + 38, gy); gy += 4;
+  }
+  y = Math.max(profile.radar.length >= 3 ? profTop + 92 : profTop, gy) + 6;
+
+  // Roadmap may need a fresh page after the profile.
+  if (y > BODY_BOTTOM - (LANE_H + 12)) { doc.addPage(); page += 1; header(doc, meta); footer(doc, page); y = HEADER_H + 12; }
   y = sectionHeading(doc, y, 'Development roadmap');
   const total = Math.max(meta.horizonMonths, 6, ...lanes.flatMap((l) => l.steps.map((s) => s.month)));
   const tlX = MARGIN + LABEL_W, tlW = PW - MARGIN - tlX;
@@ -160,6 +252,6 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
   drawDiamond(doc, MARGIN + 78, y - 1, 2, { fill: CYAN_D }); doc.text('Planned training', MARGIN + 82, y);
   drawDiamond(doc, MARGIN + 135, y - 1, 2, { dashed: true, stroke: DANGER }); doc.text('Training to be defined', MARGIN + 139, y);
   // mark unused-but-meaningful colour so linters keep it; level names used in callers
-  void LEVELS; void WHITE; void FAINT;
+
   return doc;
 }

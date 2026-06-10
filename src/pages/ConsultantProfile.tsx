@@ -1146,6 +1146,12 @@ export default function ConsultantProfile() {
         reference: assessment ? `PLAN-${assessment.id.slice(0, 8).toUpperCase()}` : undefined,
       },
       assessment?.plan_summary ?? null,
+      {
+        radar: radarData.map((d) => ({ axis: d.competency, current: d.current, required: d.target })),
+        gaps: gaps.map((g) => ({ name: g.name, current: g.current, required: g.required })),
+        atRequired,
+        total: liveComps.length,
+      },
       reportLanes(),
     );
     doc.save(`${name} - Upskilling Plan.pdf`);
@@ -1330,12 +1336,18 @@ export default function ConsultantProfile() {
             <ul className="gaps-list">
               {gaps.map((g) => (
                 <li className="gap-row" key={g.id}>
-                  <div className="gap-main">
+                  <div className="gap-head">
                     <span className="gap-name" title={g.name}>{g.name}</span>
                     {g.noTraining && <span className="gap-flag">No training</span>}
                   </div>
-                  <span className="gap-lvls">{g.current} → {g.required}</span>
-                  <span className="gap-badge">+{g.gap}</span>
+                  <div className="lvlbar-track gap-bar">
+                    <div className="lvlbar-fill" style={{ width: `${(g.current / 5) * 100}%` }} />
+                    <span className="lvlbar-target" style={{ left: `${(g.required / 5) * 100}%` }} title={`Required: ${LP_LABELS[g.required]}`} />
+                  </div>
+                  <div className="gap-cap">
+                    <span>Now {LP_LABELS[g.current] ?? 'Not assessed'}</span>
+                    <span className="gap-need">Needs {LP_LABELS[g.required]}</span>
+                  </div>
                 </li>
               ))}
             </ul>
