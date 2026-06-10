@@ -27,48 +27,52 @@ function stepIndex(status: Assessment['status'] | null): number {
   }
 }
 
-// ---------------- Filling figure: a hard-hat worker that fills like a meter ----------------
+// ---------------- Filling tank: a stylised 3D container that fills with progress ----------------
 function Figure({ progress, full }: { progress: number; full: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id); }, []);
-  const top = 66, bottom = 346, height = bottom - top;
-  const waterline = bottom - progress * height;
-  const BODY = 'M88,124 C88,134 84,140 78,144 C62,150 50,164 48,184 C46,210 50,300 50,330 Q50,346 66,346 L134,346 Q150,346 150,330 C150,300 154,210 152,184 C150,164 138,150 122,144 C116,140 112,134 112,124 Z';
-  const HAT = 'M64,72 Q64,42 100,42 Q136,42 136,72 Z';
+  const innerTop = 54, innerBottom = 334, rng = innerBottom - innerTop;
+  const wl = innerBottom - Math.max(0, Math.min(1, progress)) * rng;
+  const op = full ? 0.98 : 0.85;
+  const glow = full ? 'url(#tankGlow)' : undefined;
   return (
     <svg className="fig-svg" viewBox="0 0 200 372" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <clipPath id="figClip"><circle cx="100" cy="98" r="30" /><path d={BODY} /></clipPath>
-        <linearGradient id="figWater" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#36d3c4" /><stop offset="100%" stopColor="#84c341" />
+        <clipPath id="tankInner"><rect x="59" y="54" width="82" height="280" rx="11" /></clipPath>
+        <linearGradient id="tankGlass" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#243643" /><stop offset="14%" stopColor="#33485770" />
+          <stop offset="42%" stopColor="#1a2731" /><stop offset="72%" stopColor="#141e28" /><stop offset="100%" stopColor="#202f3b" />
         </linearGradient>
-        <filter id="figGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <linearGradient id="tankLiquid" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3fe0d0" /><stop offset="55%" stopColor="#36d3c4" /><stop offset="100%" stopColor="#84c341" />
+        </linearGradient>
+        <linearGradient id="tankRim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0e151d" /><stop offset="100%" stopColor="#1b2935" />
+        </linearGradient>
+        <filter id="tankGlow" x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
       </defs>
-      <g clipPath="url(#figClip)">
-        <rect width="200" height="372" fill="#161e29" />
-        <g style={{ transform: mounted ? 'translateY(0)' : `translateY(${height}px)`, transition: 'transform 1.7s cubic-bezier(.22,.61,.36,1)' }}>
-          <rect x="0" y={waterline} width="200" height={372 - waterline} fill="url(#figWater)" opacity="0.92" />
-          <path className="wave wave-a" d={`M0,${waterline} q25,-9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V372 H0 Z`} fill="#36d3c4" opacity="0.45" />
-          <path className="wave wave-b" d={`M0,${waterline + 4} q25,9 50,0 t50,0 t50,0 t50,0 t50,0 t50,0 V372 H0 Z`} fill="#84c341" opacity="0.30" />
+      <ellipse cx="100" cy="344" rx="52" ry="11" fill="#0c1219" />
+      <rect x="50" y="46" width="100" height="298" rx="13" fill="url(#tankGlass)" />
+      <g clipPath="url(#tankInner)">
+        <rect x="59" y="54" width="82" height="280" fill="#121a24" />
+        <g style={{ transform: mounted ? 'translateY(0)' : `translateY(${rng}px)`, transition: 'transform 1.7s cubic-bezier(.22,.61,.36,1)' }}>
+          <rect x="59" y={wl} width="82" height={innerBottom - wl} fill="url(#tankLiquid)" opacity="0.95" />
+          <ellipse cx="100" cy={wl} rx="41" ry="5.5" fill="#5cf0e2" opacity="0.85" />
+          <path className="wave wave-a" d={`M59,${wl} q20,-7 41,0 t41,0 V334 H59 Z`} fill="#36d3c4" opacity="0.30" />
+          <path className="wave wave-b" d={`M59,${wl + 4} q20,7 41,0 t41,0 V334 H59 Z`} fill="#84c341" opacity="0.22" />
         </g>
+        <rect x="64" y="56" width="9" height="276" rx="4" fill="#ffffff" opacity="0.05" />
+        {[1, 2, 3, 4, 5].map((L) => {
+          const y = innerBottom - (L / 5) * rng, gold = L === 4, wln = gold ? 14 : 9;
+          return <line key={L} x1={142 - wln} y1={y} x2={142} y2={y} stroke={gold ? '#d7b23e' : '#3a4b59'} strokeWidth="2" opacity={gold ? 0.9 : 0.5} />;
+        })}
       </g>
-      <g fill="none" stroke="#36d3c4" strokeWidth="3" strokeLinejoin="round" opacity={full ? 0.95 : 0.78} filter={full ? 'url(#figGlow)' : undefined}>
-        <circle cx="100" cy="98" r="30" />
-        <path d={BODY} />
-      </g>
-      <g fill="none" stroke="#9fe6ff" strokeWidth="3" strokeLinejoin="round" opacity="0.9">
-        <path d={HAT} />
-        <ellipse cx="100" cy="72" rx="46" ry="7" />
-        <line x1="100" y1="42" x2="100" y2="66" />
-      </g>
-      <g transform="translate(100,250)" fill="none" stroke="#eafff7" strokeWidth="1.8" opacity="0.9">
-        <ellipse rx="22" ry="8.5" />
-        <ellipse rx="22" ry="8.5" transform="rotate(60)" />
-        <ellipse rx="22" ry="8.5" transform="rotate(120)" />
-        <circle r="2.6" fill="#eafff7" stroke="none" />
-      </g>
+      <ellipse cx="100" cy="46" rx="50" ry="11" fill="url(#tankRim)" stroke="#36d3c4" strokeWidth="2.5" opacity={op} filter={glow} />
+      <ellipse cx="100" cy="46" rx="50" ry="11" fill="none" stroke="#9fe6ff" strokeWidth="1.2" opacity="0.5" />
+      <rect x="50" y="46" width="100" height="298" rx="13" fill="none" stroke="#36d3c4" strokeWidth="2.6" opacity={op} filter={glow} />
+      <rect x="57" y="60" width="7" height="270" rx="3.5" fill="#ffffff" opacity="0.07" />
     </svg>
   );
 }
