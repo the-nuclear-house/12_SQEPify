@@ -196,6 +196,7 @@ export interface Assessment {
   consultant_id: string;
   status: AssessmentStatus;
   horizon_months: number;
+  plan_summary: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

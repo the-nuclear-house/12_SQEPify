@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import type { ProductRole } from '../lib/types';
 import Logo from './Logo';
@@ -73,9 +74,22 @@ export default function AppShell() {
   const isSuperadmin = role === 'superadmin';
   const myProfile = isConsultant && user?.consultant_id ? `/consultants/${user.consultant_id}` : null;
 
+  // Publish the topbar's height so full-screen overlays (e.g. the plan editor) can sit below it.
+  const barRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    window.addEventListener('resize', set);
+    return () => { ro.disconnect(); window.removeEventListener('resize', set); };
+  }, []);
+
   return (
     <div className="app-frame">
-      <header className="topbar">
+      <header className="topbar" ref={barRef}>
         <div className="brand">
           <span className="logo">
             <Logo size={32} />
