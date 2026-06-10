@@ -844,6 +844,18 @@ export default function ConsultantProfile() {
     [drillCat, liveComps],
   );
   const atRequired = useMemo(() => liveComps.filter((c) => c.required > 0 && c.current >= c.required).length, [liveComps]);
+  // Competencies still below their required level, biggest shortfall first; flag any with no training to close the gap.
+  const gaps = useMemo(
+    () => liveComps
+      .filter((c) => c.required > 0 && c.current < c.required)
+      .map((c) => ({
+        ...c,
+        gap: c.required - c.current,
+        noTraining: !clts.some((t) => t.competency_id === c.id && t.level > c.current && t.level <= c.required),
+      }))
+      .sort((a, b) => b.gap - a.gap || a.name.localeCompare(b.name)),
+    [liveComps, clts],
+  );
   const validated = !!assessment && ['planning', 'plan_review', 'delivered'].includes(assessment.status);
   const nonBaseRoles = useMemo(() => roles.filter((r) => !r.is_base), [roles]);
   const rolesAdding = editSel.some((r) => !selected.includes(r));
@@ -1137,53 +1149,27 @@ export default function ConsultantProfile() {
       <NuclearisationProcess steps={STEPS} current={current} onSelect={(i) => { if (i === 0) setSetupWiz(0); setModalStep(i); }} />
 
       <div className="profile-top">
-        <div className="profile-left">
-          <div className="card fig-card">
-            {validated ? (
-              <>
-                <Figure progress={progress} full={full} />
-                <div className="fig-readout">
-                  <div className="big-pct">{pct}%</div>
-                  <div className="fig-caption">SQEPimeter</div>
-                  {full
-                    ? <div className="fig-sqepified">This consultant is SQEPified</div>
-                    : <div className="fig-sub">{atRequired}/{liveComps.length} competencies at the required level</div>}
-                </div>
-              </>
-            ) : (
-              <div className="fig-placeholder">
-                <div className="fig-placeholder-atom"><span /><span /><span /></div>
-                <p className="muted">The SQEPimeter appears once the assessment is validated.</p>
+        <div className="card fig-card">
+          {validated ? (
+            <>
+              <Figure progress={progress} full={full} />
+              <div className="fig-readout">
+                <div className="big-pct">{pct}%</div>
+                <div className="fig-caption">SQEPimeter</div>
+                {full
+                  ? <div className="fig-sqepified">This consultant is SQEPified</div>
+                  : <div className="fig-sub">{atRequired}/{liveComps.length} competencies at the required level</div>}
               </div>
-            )}
-          </div>
-
-          <div className="card radar-card">
-            <div className="radar-head">
-              <h2>Competency map{drillCat && <> · <span className="radar-cat">{drillCat}</span></>}</h2>
-              {drillCat && <button className="link-btn" onClick={() => setDrillCat(null)}>← All categories</button>}
+            </>
+          ) : (
+            <div className="fig-placeholder">
+              <div className="fig-placeholder-atom"><span /><span /><span /></div>
+              <p className="muted">The SQEPimeter appears once the assessment is validated.</p>
             </div>
-            {hasScores && !drillCat && <p className="muted radar-roles">Click a category to see its competencies.</p>}
-            {hasScores ? (
-              <>
-                {drillCat ? (
-                  <LevelBars items={drillData} onSelect={(it) => setPathComp(it)} />
-                ) : (
-                  <Radar
-                    key="all"
-                    comps={radarData}
-                    onAxisClick={(label) => setDrillCat(label)}
-                  />
-                )}
-                <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
-              </>
-            ) : (
-              <EmptyViz title="Not assessed yet" hint="Map fills in once the consultant completes their self-assessment." />
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="profile-right">
+        <div className="profile-rstack">
           <div className="card">
             <h2 className="panel-title">Details</h2>
             <dl className="info-list">
@@ -1216,6 +1202,52 @@ export default function ConsultantProfile() {
               </>
             )}
           </div>
+        </div>
+
+        <div className="card radar-card">
+          <div className="radar-head">
+            <h2>Competency map{drillCat && <> · <span className="radar-cat">{drillCat}</span></>}</h2>
+            {drillCat && <button className="link-btn" onClick={() => setDrillCat(null)}>← All categories</button>}
+          </div>
+          {hasScores && !drillCat && <p className="muted radar-roles">Click a category to see its competencies.</p>}
+          {hasScores ? (
+            <>
+              {drillCat ? (
+                <LevelBars items={drillData} onSelect={(it) => setPathComp(it)} />
+              ) : (
+                <Radar
+                  key="all"
+                  comps={radarData}
+                  onAxisClick={(label) => setDrillCat(label)}
+                />
+              )}
+              <div className="radar-key"><span><i className="key-cur" /> Current</span><span><i className="key-tgt" /> Target</span></div>
+            </>
+          ) : (
+            <EmptyViz title="Not assessed yet" hint="Map fills in once the consultant completes their self-assessment." />
+          )}
+        </div>
+
+        <div className="card gaps-card">
+          <h2 className="panel-title">Gaps to SQEP</h2>
+          {!validated ? (
+            <p className="muted">Appears once the assessment is validated.</p>
+          ) : gaps.length === 0 ? (
+            <p className="gaps-clear"><span className="dot-ok" />At or above the required level on every competency.</p>
+          ) : (
+            <ul className="gaps-list">
+              {gaps.map((g) => (
+                <li className="gap-row" key={g.id}>
+                  <div className="gap-main">
+                    <span className="gap-name" title={g.name}>{g.name}</span>
+                    {g.noTraining && <span className="gap-flag">No training</span>}
+                  </div>
+                  <span className="gap-lvls">{g.current} → {g.required}</span>
+                  <span className="gap-badge">+{g.gap}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
