@@ -148,10 +148,15 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
     y += 4;
   }
 
-  // Competency profile: category radar (current vs required) on the left, gaps on the right.
+  // Competency profile: category radar (current vs required) plus the full gaps list.
+  // Start on a fresh page if the radar wouldn't fit, so the chart is never clipped.
+  if (y + 100 > BODY_BOTTOM) { doc.addPage(); page += 1; header(doc, meta); footer(doc, page); y = HEADER_H + 12; }
   y = sectionHeading(doc, y, 'Competency profile');
   const profTop = y;
-  if (profile.radar.length >= 3) {
+  const TRACK: RGB = [233, 237, 242];
+  const radarDrawn = profile.radar.length >= 3;
+  const radarBottom = profTop + 92;
+  if (radarDrawn) {
     const cx = MARGIN + 44, cy = profTop + 42, R = 34;
     drawRadar(doc, cx, cy, R, profile.radar);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...MGREY);
@@ -160,43 +165,53 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
     doc.setLineDashPattern([0.8, 0.8], 0); doc.setDrawColor(...GOLD); doc.line(MARGIN + 30, cy + R + 16, MARGIN + 36, cy + R + 16); doc.setLineDashPattern([], 0);
     doc.text('Required', MARGIN + 38, cy + R + 17);
   }
+
+  // One gap row (name + shortfall + level bar) at a given x/width.
+  const ROW_H = 12.5;
+  const gapRow = (g: ProfileGap, x: number, ry: number, w: number) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NAVY);
+    doc.text(trunc(g.name, Math.floor(w / 2.1)), x, ry);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MGREY);
+    doc.text(`${LEVELS[g.current]} to ${LEVELS[g.required]}`, x + w, ry, { align: 'right' });
+    const by = ry + 2.6, barH = 3.2;
+    doc.setFillColor(...TRACK); doc.roundedRect(x, by, w, barH, 1, 1, 'F');
+    const cw = Math.max(0, Math.min(1, g.current / 5)) * w;
+    if (cw > 0) { doc.setFillColor(...CYAN_D); doc.roundedRect(x, by, cw, barH, 1, 1, 'F'); }
+    const rx = x + Math.min(1, g.required / 5) * w;
+    doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.setLineWidth(0.7);
+    doc.line(rx, by - 1, rx, by + barH + 1); doc.setLineDashPattern([], 0);
+  };
+
+  // Heading + count + legend in the right column, beside the radar.
+  let gx = radarDrawn ? MARGIN + 100 : MARGIN;
+  let gw = PW - MARGIN - gx;
   let gy = profTop + 1;
-  const gx = MARGIN + 100;
-  const gW = PW - MARGIN - gx;
-  const TRACK: RGB = [233, 237, 242];
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
   doc.text('Current levels and gaps', gx, gy); gy += 6;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MGREY);
-  doc.text(`${profile.atRequired} of ${profile.total} competencies are at the required level.`, gx, gy); gy += 8;
+  doc.text(`${profile.atRequired} of ${profile.total} competencies are at the required level.`, gx, gy); gy += 6;
+  doc.setFontSize(6.5);
+  doc.setFillColor(...CYAN_D); doc.roundedRect(gx, gy - 2, 5, 2.4, 0.6, 0.6, 'F'); doc.text('Current level', gx + 7, gy);
+  doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.line(gx + 36, gy - 2.4, gx + 36, gy + 0.6); doc.setLineDashPattern([], 0);
+  doc.text('Required level', gx + 38, gy); gy += 6;
+
   if (profile.gaps.length === 0) {
-    doc.setTextColor(...GREEN); doc.text('No gaps remain against the required levels.', gx, gy); gy += 6;
+    doc.setFontSize(9); doc.setTextColor(...GREEN); doc.text('No gaps remain against the required levels.', gx, gy); gy += 6;
   } else {
-    const show = profile.gaps.slice(0, 6);
-    show.forEach((g) => {
-      // name + the shortfall, on one line
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NAVY);
-      doc.text(trunc(g.name, 52), gx, gy);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MGREY);
-      doc.text(`${LEVELS[g.current]} to ${LEVELS[g.required]}`, PW - MARGIN, gy, { align: 'right' });
-      gy += 2.6;
-      // level bar: 0..5 scale, cyan fill to current, gold dashed marker at required
-      const barH = 3.2;
-      doc.setFillColor(...TRACK); doc.roundedRect(gx, gy, gW, barH, 1, 1, 'F');
-      const cw = Math.max(0, Math.min(1, g.current / 5)) * gW;
-      if (cw > 0) { doc.setFillColor(...CYAN_D); doc.roundedRect(gx, gy, cw, barH, 1, 1, 'F'); }
-      const rx = gx + Math.min(1, g.required / 5) * gW;
-      doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.setLineWidth(0.7);
-      doc.line(rx, gy - 1, rx, gy + barH + 1); doc.setLineDashPattern([], 0);
-      gy += barH + 6.5;
-    });
-    if (profile.gaps.length > show.length) { doc.setTextColor(...MGREY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(`and ${profile.gaps.length - show.length} more below the required level`, gx, gy); gy += 5; }
-    // bar legend
-    doc.setFontSize(6.5); doc.setTextColor(...MGREY);
-    doc.setFillColor(...CYAN_D); doc.roundedRect(gx, gy - 2, 5, 2.4, 0.6, 0.6, 'F'); doc.text('Current level', gx + 7, gy);
-    doc.setLineDashPattern([0.7, 0.7], 0); doc.setDrawColor(...GOLD); doc.line(gx + 36, gy - 2.4, gx + 36, gy + 0.6); doc.setLineDashPattern([], 0);
-    doc.text('Required level', gx + 38, gy); gy += 4;
+    for (const g of profile.gaps) {
+      if (gy + ROW_H > BODY_BOTTOM) {
+        // continue the list on a fresh page, full width
+        doc.addPage(); page += 1; header(doc, meta); footer(doc, page);
+        gy = HEADER_H + 12; gy = sectionHeading(doc, gy, 'Current levels and gaps (continued)');
+        gx = MARGIN; gw = CW;
+      } else if (radarDrawn && gx > MARGIN && gy > radarBottom) {
+        // drop below the radar and use the full width to fill the page
+        gx = MARGIN; gw = CW;
+      }
+      gapRow(g, gx, gy, gw); gy += ROW_H;
+    }
   }
-  y = Math.max(profile.radar.length >= 3 ? profTop + 92 : profTop, gy) + 6;
+  y = Math.max(radarDrawn ? radarBottom : profTop, gy) + 6;
 
   // Roadmap may need a fresh page after the profile.
   if (y > BODY_BOTTOM - (LANE_H + 12)) { doc.addPage(); page += 1; header(doc, meta); footer(doc, page); y = HEADER_H + 12; }
