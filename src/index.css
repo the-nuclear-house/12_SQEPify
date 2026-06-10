@@ -1911,3 +1911,30 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .gap-badge { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--brand-gold); border: 1px solid var(--brand-gold); border-radius: 999px; padding: 1px 7px; }
 .gaps-clear { display: flex; align-items: center; gap: 8px; color: var(--brand-green); font-size: 14px; margin-top: 8px; }
 .dot-ok { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-green); flex: none; }
+
+/* Learning path: defined staircase with arrows and a training picker */
+.lp-flow { display: flex; flex-direction: column; margin: 6px 0 4px; }
+.lp-card { background: var(--surface-2); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+.lp-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.lp-card-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.lp-card-stars { margin-left: auto; color: var(--brand-gold); letter-spacing: 2px; font-size: 13px; }
+.lp-meaning-lbl { display: block; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 5px; }
+.lp-expect { width: 100%; }
+.lp-arrow-row { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: stretch; padding: 6px 0; }
+.lp-arrow { position: relative; display: flex; align-items: center; justify-content: center; }
+.lp-arrow::before { content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.lp-arrow-dot { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-3); color: var(--text-muted); display: grid; place-items: center; font-size: 13px; }
+.lp-train-strip { background: var(--surface); border: 1px dashed var(--border-soft); border-radius: 9px; padding: 9px 11px; }
+.lp-train-label { display: block; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 7px; }
+.lp-train-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-train-none { font-size: 12px; }
+.lp-train-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px; padding: 3px 4px 3px 9px; }
+.lp-add-btn { font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid transparent; border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.lp-add-btn:hover { border-color: var(--accent); }
+.lp-picker-overlay { z-index: 200; }
+.lp-picker { max-width: 460px; }
+.lp-picker-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; margin-top: 10px; }
+.lp-picker-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; color: var(--text); }
+.lp-picker-item:hover { border-color: var(--accent); background: var(--surface-3); }
+.lp-picker-title { font-size: 13px; font-weight: 600; }
+.lp-picker-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); flex: none; }
