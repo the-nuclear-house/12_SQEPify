@@ -155,7 +155,6 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
   const profTop = y;
   const TRACK: RGB = [233, 237, 242];
   const radarDrawn = profile.radar.length >= 3;
-  const radarBottom = profTop + 92;
   if (radarDrawn) {
     const cx = MARGIN + 44, cy = profTop + 42, R = 34;
     drawRadar(doc, cx, cy, R, profile.radar);
@@ -167,7 +166,6 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
   }
 
   // One gap row (name + shortfall + level bar) at a given x/width.
-  const ROW_H = 12.5;
   const gapRow = (g: ProfileGap, x: number, ry: number, w: number) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...NAVY);
     doc.text(trunc(g.name, Math.floor(w / 2.1)), x, ry);
@@ -183,8 +181,8 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
   };
 
   // Heading + count + legend in the right column, beside the radar.
-  let gx = radarDrawn ? MARGIN + 100 : MARGIN;
-  let gw = PW - MARGIN - gx;
+  const gx = radarDrawn ? MARGIN + 100 : MARGIN;
+  const gw = PW - MARGIN - gx;
   let gy = profTop + 1;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...NAVY);
   doc.text('Current levels and gaps', gx, gy); gy += 6;
@@ -198,23 +196,13 @@ export function generatePlanReportPDF(meta: PlanReportMeta, brief: string | null
   if (profile.gaps.length === 0) {
     doc.setFontSize(9); doc.setTextColor(...GREEN); doc.text('No gaps remain against the required levels.', gx, gy); gy += 6;
   } else {
-    for (const g of profile.gaps) {
-      if (gy + ROW_H > BODY_BOTTOM) {
-        // continue the list on a fresh page, full width
-        doc.addPage(); page += 1; header(doc, meta); footer(doc, page);
-        gy = HEADER_H + 12; gy = sectionHeading(doc, gy, 'Current levels and gaps (continued)');
-        gx = MARGIN; gw = CW;
-      } else if (radarDrawn && gx > MARGIN && gy > radarBottom) {
-        // drop below the radar and use the full width to fill the page
-        gx = MARGIN; gw = CW;
-      }
-      gapRow(g, gx, gy, gw); gy += ROW_H;
-    }
+    // Keep all gaps in the right column on this single page; shrink the row pitch if there are many.
+    const rowH = Math.max(7.5, Math.min(12.5, (BODY_BOTTOM - gy) / profile.gaps.length));
+    profile.gaps.forEach((g) => { gapRow(g, gx, gy, gw); gy += rowH; });
   }
-  y = Math.max(radarDrawn ? radarBottom : profTop, gy) + 6;
 
-  // Roadmap may need a fresh page after the profile.
-  if (y > BODY_BOTTOM - (LANE_H + 12)) { doc.addPage(); page += 1; header(doc, meta); footer(doc, page); y = HEADER_H + 12; }
+  // The schedule always starts flush at the top of the next page.
+  doc.addPage(); page += 1; header(doc, meta); footer(doc, page); y = HEADER_H + 12;
   y = sectionHeading(doc, y, 'Development roadmap');
   const total = Math.max(meta.horizonMonths, 6, ...lanes.flatMap((l) => l.steps.map((s) => s.month)));
   const tlX = MARGIN + LABEL_W, tlW = PW - MARGIN - tlX;
