@@ -1052,8 +1052,8 @@ export default function ConsultantProfile() {
     const started = Date.now();
     const horizon = assessment.horizon_months ?? 18;
     const spacing = 2; // months between consecutive steps within a competency
-    // Build a stepwise roadmap per competency: one diamond for each level from the
-    // current level up to the required level, in order, each tied to the training that reaches it.
+    // Build a stepwise roadmap per competency. A level may need more than one training,
+    // so create a diamond for each training that reaches it, in sequence.
     const rows: Array<Record<string, unknown>> = [];
     let order = 0;
     applicable.forEach((c) => {
@@ -1061,21 +1061,16 @@ export default function ConsultantProfile() {
       const cur = sc?.validated_level ?? sc?.self_level ?? sc?.ai_level ?? 0;
       let step = 0;
       for (let L = Math.max(cur + 1, 2); L <= c.required; L++) {
-        const tr = clts.find((x) => x.competency_id === c.id && x.level === L);
-        const startMonth = Math.min(step * spacing, horizon - 1);
-        rows.push({
-          assessment_id: assessment.id,
-          kind: tr ? 'training' : 'missing',
-          training_id: tr ? tr.training_id : null,
-          competency_id: c.id,
-          from_level: L - 1,
-          to_level: L,
-          start_month: startMonth,
-          duration_months: 1,
-          status: 'planned',
-          sort_order: order++,
-        });
-        step++;
+        const trs = clts.filter((x) => x.competency_id === c.id && x.level === L);
+        if (trs.length === 0) {
+          rows.push({ assessment_id: assessment.id, kind: 'missing', training_id: null, competency_id: c.id, from_level: L - 1, to_level: L, start_month: Math.min(step * spacing, horizon - 1), duration_months: 1, status: 'planned', sort_order: order++ });
+          step++;
+        } else {
+          trs.forEach((tr) => {
+            rows.push({ assessment_id: assessment.id, kind: 'training', training_id: tr.training_id, competency_id: c.id, from_level: L - 1, to_level: L, start_month: Math.min(step * spacing, horizon - 1), duration_months: 1, status: 'planned', sort_order: order++ });
+            step++;
+          });
+        }
       }
     });
     await supabase.from('plan_items').delete().eq('assessment_id', assessment.id);

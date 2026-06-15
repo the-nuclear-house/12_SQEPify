@@ -1686,13 +1686,13 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .dash-row.is-inactive { opacity: 0.6; }
 
 /* Gantt v2: per-competency lanes, baseline line, milestone diamonds */
-.gantt2 { margin-top: 6px; }
+.gantt2 { margin-top: 14px; }
 .gantt2-scroll { overflow-x: auto; }
 .gantt2-grid { min-width: 520px; }
 .gantt2-axis { position: relative; height: 20px; margin-left: 150px; border-bottom: 1px solid var(--border-soft); }
 .gantt2-tick { position: absolute; transform: translateX(-50%); font-size: 10px; font-family: var(--font-mono); color: var(--text-faint); }
 .gantt2-lane { display: grid; grid-template-columns: 150px 1fr; align-items: center; height: 40px; }
-.gantt2-lane-name { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
+.gantt2-lane-name { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
 .gantt2-track { position: relative; height: 100%; }
 .gantt2-baseline { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border); }
 .gantt2-span { position: absolute; top: 50%; transform: translateY(-50%); height: 3px; border-radius: 2px; background: var(--surface-3); }
@@ -1945,9 +1945,9 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .lp-picker-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); flex: none; }
 
 /* Plan roadmap: target-level star above each diamond */
-.gantt2-lane { height: 46px; }
+.gantt2-lane { height: 56px; }
 .gantt2-target { position: absolute; top: 3px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 9px; color: var(--brand-gold); white-space: nowrap; pointer-events: none; }
 
 /* Plan card: AI brief + head actions */
 .gantt-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.plan-brief { margin: 0 0 14px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; color: var(--text); }
+.plan-brief { margin: 4px 0 18px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; color: var(--text); }
