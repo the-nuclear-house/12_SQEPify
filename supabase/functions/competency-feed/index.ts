@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const URL = Deno.env.get('SUPABASE_URL')!
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const FEED_TOKEN = Deno.env.get('FEED_TOKEN')!
+const FEED_TOKEN = Deno.env.get('COMPETENCY_FEED_TOKEN')!
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, OPTIONS' }
 const SCALE = [
   { level: 1, name: 'No knowledge' }, { level: 2, name: 'Awareness' }, { level: 3, name: 'Basic competence' },

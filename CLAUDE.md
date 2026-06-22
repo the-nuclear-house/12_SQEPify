@@ -28,9 +28,9 @@ Room (and any other consumer) read the live framework from SQEPify.
 
 - Read-only `GET`. Returns the scale, categories, competencies and roles, with each
   competency and role keyed by its stable `code`.
-- Auth is a shared bearer token in the `FEED_TOKEN` secret; requests without a matching
-  `Authorization: Bearer <token>` are rejected with 401.
-- Required secrets (set in the Supabase dashboard, never committed): `FEED_TOKEN`.
+- Auth is a shared bearer token in the `COMPETENCY_FEED_TOKEN` secret; requests without a
+  matching `Authorization: Bearer <token>` are rejected with 401.
+- Required secrets (set in the Supabase dashboard, never committed): `COMPETENCY_FEED_TOKEN`.
   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.
 - Deployed by pasting the whole file into a new Supabase edge function of the same name
   (this project does not use the Supabase CLI to deploy).
