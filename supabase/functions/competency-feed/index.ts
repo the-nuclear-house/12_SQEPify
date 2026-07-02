@@ -21,12 +21,38 @@ serve(async (req) => {
     const cats = await rest('competency_categories?select=name,sort_order&order=sort_order')
     const comps = await rest('competencies?select=code,name,description,sort_order,category:competency_categories(name),subcategory:competency_subcategories(name)&order=sort_order')
     const roles = await rest('roles?select=code,name,is_base,sort_order,role_competencies(required_level,competency:competencies(code))&order=sort_order')
+    // Control Room consumes role_templates. SQEPify's `roles` table IS the template store, so
+    // one query feeds both the legacy `roles` array (raw 1-5 levels, kept for back-compat) and
+    // the richer `role_templates` array below. Fields SQEPify does not model are synthesised:
+    //   importance -> always 'H' (SQEPify has no must-have/good-to-have flag; everything assigned
+    //                 to a role is required). required_level -> mapped from SQEPify's 1-5 scale to
+    //                 Control Room's 0-4 by subtracting 1 (1 No knowledge -> 0 ... 5 Expert -> 4).
+    //   discipline/description/notes -> null (no such columns). is_active -> always true (roles
+    //                 are not archived in SQEPify; deleting a role removes it outright).
+    const role_templates = roles.map((r: any) => ({
+      code: r.code,
+      name: r.name,
+      discipline: null,
+      description: null,
+      is_active: true,
+      is_base: r.is_base,
+      sort_order: r.sort_order,
+      competencies: (r.role_competencies ?? [])
+        .filter((rc: any) => rc.competency?.code)
+        .map((rc: any) => ({
+          competency_code: rc.competency.code,
+          importance: 'H',
+          required_level: Math.min(4, Math.max(0, (rc.required_level ?? 1) - 1)),
+          notes: null,
+        })),
+    }))
     const body = {
       generated_at: new Date().toISOString(),
       scale: SCALE,
       categories: cats.map((c: any) => ({ name: c.name, sort_order: c.sort_order })),
       competencies: comps.map((c: any) => ({ code: c.code, name: c.name, description: c.description, sort_order: c.sort_order, category: c.category?.name ?? null, subcategory: c.subcategory?.name ?? null })),
       roles: roles.map((r: any) => ({ code: r.code, name: r.name, is_base: r.is_base, sort_order: r.sort_order, competencies: (r.role_competencies ?? []).map((rc: any) => ({ competency_code: rc.competency?.code ?? null, required_level: rc.required_level })) })),
+      role_templates,
     }
     return new Response(JSON.stringify(body), { headers: { ...cors, 'Content-Type': 'application/json' } })
   } catch (e) {
