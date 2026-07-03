@@ -1,3 +1,40 @@
+## Feed reports back what happened to each Control Room suggestion
+
+**What and why.** Control Room now lets a technical director score a proposed competency
+during an interview, before it is accepted, so the feed has to tell Control Room what
+became of each proposal it sent. The competency feed gains a `suggestion_decisions`
+array, one entry per proposal a TD has decided on: `added` entries carry the `code` of
+the competency it became (so Control Room can promote the provisional score to a real
+one), `dismissed` entries carry no code (so Control Room can clear the proposal). Both
+echo back the `external_ref` and `origin_type` Control Room sent. To make the `added`
+mapping solid, an accepted competency is now stamped with the `external_ref` it came from.
+
+The list keeps the most recent 500 decisions. Control Room acts on each once and ignores
+repeats, so keeping decided rows in the feed is safe. The array is built tolerantly: if
+the inbox cannot be read for any reason, the feed still serves the framework rather than
+failing the whole request.
+
+**Access in plain English.** No access change. One new optional field on competencies
+(`external_ref`), set only when a competency is added from a suggestion.
+
+**SQL (safe to re-run).**
+```sql
+alter table public.competencies add column if not exists external_ref text;
+create unique index if not exists competencies_external_ref_unique
+  on public.competencies (external_ref) where external_ref is not null;
+```
+
+**Supabase setup (not SQL).** Redeploy the `competency-feed` edge function (paste the
+updated file). No secret or new function.
+
+**Undo.**
+```sql
+drop index if exists public.competencies_external_ref_unique;
+alter table public.competencies drop column if exists external_ref;
+```
+
+---
+
 ## Competency suggestions from Control Room (inbox + review)
 
 **What and why.** Control Room can now push a competency suggestion to SQEPify for a

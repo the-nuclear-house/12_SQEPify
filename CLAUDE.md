@@ -26,8 +26,14 @@ against production would destroy and recreate every competency and role, breakin
 `supabase/functions/competency-feed/index.ts` is the one-way JSON feed that lets Control
 Room (and any other consumer) read the live framework from SQEPify.
 
-- Read-only `GET`. Returns the scale, categories, competencies, roles and `role_templates`,
-  with each competency and role keyed by its stable `code`.
+- Read-only `GET`. Returns the scale, categories, competencies, roles, `role_templates`
+  and `suggestion_decisions`, with each competency and role keyed by its stable `code`.
+- `suggestion_decisions` reports what happened to each proposal Control Room pushed in: one
+  entry per decided suggestion, echoing back the `external_ref` and `origin_type` from the
+  inbox. `added` entries include `competency_code` (the added competency's `code`, mapped
+  via the `external_ref` stamped on it); `dismissed` entries carry no code. Built from
+  `competency_suggestion_inbox` (most recent 500), and tolerant: if the inbox read fails the
+  feed still serves the framework with an empty decisions list.
 - `role_templates` is the array Control Room syncs for recruitment. It reuses the `roles`
   table (SQEPify has no separate template store) and joins competencies by their stable
   `code`. Because SQEPify does not model them, `importance` is always `"H"`,

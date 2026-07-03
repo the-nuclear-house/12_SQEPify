@@ -52,7 +52,10 @@ built.
 
 Each competency also carries a stable `code`, the key the competency feed and Control
 Room join on. It is filled automatically when a competency is created (a slug of its
-name, made unique) and must not be reused, because downstream systems reference it.
+name, made unique) and must not be reused, because downstream systems reference it. A
+competency added from a Control Room suggestion also carries `external_ref`, the id
+Control Room sent, so the feed can report it back as added (see `suggestion_decisions`
+in the `competency-feed` function); it is empty for competencies added by hand.
 
 **Who can write:** staff (superadmins and Technical Directors), through the editable
 Nuclear Competencies page.
