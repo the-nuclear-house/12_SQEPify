@@ -124,6 +124,28 @@ export interface RoleCompetency {
   created_at: string;
 }
 
+export interface CompetencySuggestion {
+  id: string;
+  external_ref: string;
+  source: string;
+  origin_type: string | null;
+  origin_id: string | null;
+  origin_label: string | null;
+  name: string;
+  category: string | null;
+  description: string | null;
+  rationale: string | null;
+  submitted_by_name: string | null;
+  submitted_by_email: string | null;
+  submitted_at: string | null;
+  status: 'pending' | 'dismissed' | 'added';
+  added_as_competency_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Training {
   id: string;
   title: string;

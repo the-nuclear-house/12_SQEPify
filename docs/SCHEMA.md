@@ -50,8 +50,30 @@ category. This taxonomy is the backbone that trainings and assessments attach to
 widened to a consultant for their own competency names when the consultant profile is
 built.
 
+Each competency also carries a stable `code`, the key the competency feed and Control
+Room join on. It is filled automatically when a competency is created (a slug of its
+name, made unique) and must not be reused, because downstream systems reference it.
+
 **Who can write:** staff (superadmins and Technical Directors), through the editable
 Nuclear Competencies page.
+
+---
+
+## competency_suggestion_inbox
+
+Competency suggestions pushed to SQEPify from Control Room, for a technical director to
+review. Each row holds the suggested competency (name, category, description) plus the
+AI's rationale, where it originated (a candidate or a requirement, with a label), who
+submitted it, and a `status` of pending, dismissed or added. When added, it records the
+id of the competency it became. Keyed on Control Room's `external_ref`, so a re-send
+updates the same row rather than creating a duplicate, and never overturns a decision a
+reviewer has already made.
+
+**Who can read:** staff (superadmins and Technical Directors).
+
+**Who can write:** staff mark a suggestion dismissed or added. Rows are only ever created
+by the `competency-suggestion-inbox` edge function, using the service role; nothing adds
+to the inbox through the app.
 
 ---
 
