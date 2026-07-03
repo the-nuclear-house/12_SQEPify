@@ -1951,3 +1951,35 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 /* Plan card: AI brief + head actions */
 .gantt-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .plan-brief { margin: 4px 0 18px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; color: var(--text); }
+
+/* Control Room competency suggestions: banner + review list */
+.recommend-banner {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  margin: 0 0 16px; padding: 12px 16px; text-align: left;
+  background: rgba(215, 178, 62, 0.12); border: 1px solid var(--warn);
+  border-radius: var(--radius-sm); color: var(--text); cursor: pointer;
+  font-size: 14px; font-family: var(--font-body);
+}
+.recommend-banner:hover { background: rgba(215, 178, 62, 0.18); }
+.recommend-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px;
+  background: var(--warn); color: var(--accent-ink); font-weight: 600; font-size: 13px;
+}
+.recommend-cta { margin-left: auto; color: var(--warn); font-weight: 600; white-space: nowrap; }
+.proposal-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.proposal-card {
+  display: flex; gap: 16px; align-items: flex-start; justify-content: space-between;
+  padding: 14px 16px; background: var(--surface-2);
+  border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+}
+.proposal-main { min-width: 0; }
+.proposal-tag {
+  display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 10px;
+  background: var(--surface-3); color: var(--text-muted); font-size: 12px; vertical-align: middle;
+}
+.proposal-desc { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+.proposal-rationale { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-muted); }
+.proposal-rationale span { color: var(--text-faint); }
+.proposal-origin { margin: 8px 0 0; font-size: 12px; color: var(--text-faint); }
+.proposal-actions { display: flex; gap: 8px; flex-shrink: 0; }

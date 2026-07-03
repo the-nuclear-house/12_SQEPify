@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import ConfirmDialog from './ConfirmDialog';
 import LearningPath from './LearningPath';
 import type {
   Competency,
   CompetencyCategory,
   CompetencySubcategory,
+  CompetencySuggestion,
 } from '../lib/types';
 
 type NodeModal =
@@ -21,12 +23,24 @@ type CompModal =
   | null;
 
 export default function CompetencyLibrary() {
+  const { user } = useAuth();
   const [cats, setCats] = useState<CompetencyCategory[]>([]);
   const [subs, setSubs] = useState<CompetencySubcategory[]>([]);
   const [comps, setComps] = useState<Competency[]>([]);
   const [completeIds, setCompleteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Competency suggestions pushed from Control Room, awaiting a technical director's review.
+  const [proposals, setProposals] = useState<CompetencySuggestion[]>([]);
+  const [proposalsOpen, setProposalsOpen] = useState(false);
+  // The proposal being turned into a real competency (prefilled, editable before confirming).
+  const [review, setReview] = useState<CompetencySuggestion | null>(null);
+  const [rName, setRName] = useState('');
+  const [rDesc, setRDesc] = useState('');
+  const [rCatId, setRCatId] = useState('');
+  const [rSubId, setRSubId] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const [activeSub, setActiveSub] = useState<Record<string, string>>({});
 
@@ -43,19 +57,21 @@ export default function CompetencyLibrary() {
 
   async function load() {
     setLoading(true);
-    const [c, s, k, lp] = await Promise.all([
+    const [c, s, k, lp, pr] = await Promise.all([
       supabase.from('competency_categories').select('*').order('sort_order').order('name'),
       supabase.from('competency_subcategories').select('*').order('sort_order').order('name'),
       supabase.from('competencies').select('*').order('sort_order').order('name'),
       supabase.from('competency_level_paths').select('competency_id, level, actions'),
+      supabase.from('competency_suggestion_inbox').select('*').eq('status', 'pending').order('submitted_at', { ascending: true }),
     ]);
-    const err = c.error || s.error || k.error || lp.error;
+    const err = c.error || s.error || k.error || lp.error || pr.error;
     if (err) setError(err.message);
     else {
       setError(null);
       setCats((c.data as CompetencyCategory[]) ?? []);
       setSubs((s.data as CompetencySubcategory[]) ?? []);
       setComps((k.data as Competency[]) ?? []);
+      setProposals((pr.data as CompetencySuggestion[]) ?? []);
       // A competency is "complete" when every level on the ladder (2-5) has a written expectation.
       const levelsByComp: Record<string, Set<number>> = {};
       ((lp.data as { competency_id: string; level: number; actions: string | null }[]) ?? []).forEach((r) => {
@@ -164,6 +180,66 @@ export default function CompetencyLibrary() {
     });
   };
 
+  // ----- Control Room competency suggestions -----
+  const reviewSubs = useMemo(
+    () => (rCatId ? subs.filter((s) => s.category_id === rCatId) : []),
+    [subs, rCatId],
+  );
+
+  function openReview(p: CompetencySuggestion) {
+    // Prefill from the proposal; match the suggested category by name if we have it.
+    const matchedCat = cats.find((c) => c.name.toLowerCase() === (p.category ?? '').toLowerCase());
+    setRName(p.name);
+    setRDesc(p.description ?? '');
+    setRCatId(matchedCat?.id ?? '');
+    setRSubId('');
+    setProposalsOpen(false);
+    setReview(p);
+  }
+
+  async function dismissProposal(p: CompetencySuggestion) {
+    const { error } = await supabase
+      .from('competency_suggestion_inbox')
+      .update({ status: 'dismissed', reviewed_by: user?.id ?? null, reviewed_at: new Date().toISOString() })
+      .eq('id', p.id);
+    if (error) setError(error.message);
+    load();
+  }
+
+  async function confirmAdd() {
+    if (!review) return;
+    const name = rName.trim();
+    const desc = rDesc.trim();
+    if (!name || !desc || !rCatId || !rSubId) return;
+    setSaving(true);
+    // 1. Create the real competency in the library, prefilled and edited by the TD.
+    const { data, error } = await supabase
+      .from('competencies')
+      .insert({ category_id: rCatId, subcategory_id: rSubId, name, description: desc })
+      .select('id')
+      .single();
+    if (error) {
+      setError(error.message);
+      setSaving(false);
+      return;
+    }
+    const newId = (data as { id: string }).id;
+    // 2. Mark the proposal added and record which competency it became.
+    const { error: e2 } = await supabase
+      .from('competency_suggestion_inbox')
+      .update({
+        status: 'added',
+        added_as_competency_id: newId,
+        reviewed_by: user?.id ?? null,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', review.id);
+    if (e2) setError(e2.message);
+    setSaving(false);
+    setReview(null);
+    load();
+  }
+
   const nodeTitle = !nodeModal
     ? ''
     : `${nodeModal.mode === 'new' ? 'Add' : 'Edit'} ${nodeModal.kind === 'category' ? 'category' : 'subcategory'}`;
@@ -179,6 +255,18 @@ export default function CompetencyLibrary() {
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}
+
+      {proposals.length > 0 && (
+        <button className="recommend-banner" onClick={() => setProposalsOpen(true)}>
+          <span className="recommend-badge">{proposals.length}</span>
+          <span>
+            {proposals.length === 1
+              ? 'Competency recommended from Control Room'
+              : `Competencies recommended from Control Room (${proposals.length})`}
+          </span>
+          <span className="recommend-cta">Review →</span>
+        </button>
+      )}
 
       {loading ? (
         <div className="card"><p className="muted" style={{ padding: 16 }}>Loading…</p></div>
@@ -313,6 +401,82 @@ export default function CompetencyLibrary() {
           onEdit={(c) => { setPathComp(null); startEditComp(c); }}
           onDelete={(c) => { setPathComp(null); deleteComp(c); }}
         />
+      )}
+
+      {/* Control Room suggestions: the pending list */}
+      {proposalsOpen && (
+        <div className="modal-overlay" onClick={() => setProposalsOpen(false)}>
+          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Recommended from Control Room</h2>
+              <button className="modal-close" onClick={() => setProposalsOpen(false)} aria-label="Close">×</button>
+            </div>
+            <p className="muted" style={{ marginTop: 6 }}>
+              Suggestions raised in Control Room. Dismiss the ones you do not want, or add a competency to the library.
+            </p>
+            <div className="proposal-list">
+              {proposals.map((p) => (
+                <div className="proposal-card" key={p.id}>
+                  <div className="proposal-main">
+                    <span className="c-name">{p.name}</span>
+                    {p.category && <span className="proposal-tag">{p.category}</span>}
+                    {p.description && <p className="proposal-desc">{p.description}</p>}
+                    {p.rationale && <p className="proposal-rationale"><span>Why:</span> {p.rationale}</p>}
+                    <p className="proposal-origin">
+                      {p.origin_label ? `From ${p.origin_label}` : 'From Control Room'}
+                      {p.submitted_by_name ? ` · ${p.submitted_by_name}` : ''}
+                    </p>
+                  </div>
+                  <div className="proposal-actions">
+                    <button className="btn" onClick={() => dismissProposal(p)}>Dismiss</button>
+                    <button className="btn btn-primary" onClick={() => openReview(p)}>Add…</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Control Room suggestions: turn one into a real competency */}
+      {review && (
+        <div className="modal-overlay" onClick={() => setReview(null)}>
+          <div className="modal modal-tall" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Add to library</h2>
+              <button className="modal-close" onClick={() => setReview(null)} aria-label="Close">×</button>
+            </div>
+            <div className="modal-step">
+              {review.rationale && (
+                <p className="proposal-rationale" style={{ marginTop: 0 }}><span>Why:</span> {review.rationale}</p>
+              )}
+              <label>Name</label>
+              <input className="field" value={rName} onChange={(e) => setRName(e.target.value)} placeholder="Competency name" autoFocus />
+              <label>Description</label>
+              <textarea className="field" rows={2} value={rDesc} onChange={(e) => setRDesc(e.target.value)} placeholder="What this competency covers" />
+              <label>Category</label>
+              <select className="field" value={rCatId} onChange={(e) => { setRCatId(e.target.value); setRSubId(''); }}>
+                <option value="">Choose a category…</option>
+                {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <label>Subcategory</label>
+              <select className="field" value={rSubId} onChange={(e) => setRSubId(e.target.value)} disabled={!rCatId}>
+                <option value="">{rCatId ? 'Choose a subcategory…' : 'Choose a category first'}</option>
+                {reviewSubs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {rCatId && reviewSubs.length === 0 && (
+                <p className="muted" style={{ marginTop: 4 }}>This category has no subcategories yet. Add one in the library first.</p>
+              )}
+              <button
+                className="btn btn-primary btn-block"
+                onClick={confirmAdd}
+                disabled={saving || !rName.trim() || !rDesc.trim() || !rCatId || !rSubId}
+              >
+                {saving ? 'Adding…' : 'Add competency'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {confirm && (
