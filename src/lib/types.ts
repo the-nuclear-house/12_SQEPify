@@ -107,6 +107,9 @@ export interface Competency {
   level_descriptors: Record<string, string> | null;
   sort_order: number;
   created_at: string;
+  // Set when the competency was created from a Control Room suggestion; the id Control
+  // Room sent, echoed back through the feed so it can map the added competency.
+  external_ref?: string | null;
 }
 
 export interface Role {

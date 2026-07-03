@@ -213,9 +213,10 @@ export default function CompetencyLibrary() {
     if (!name || !desc || !rCatId || !rSubId) return;
     setSaving(true);
     // 1. Create the real competency in the library, prefilled and edited by the TD.
+    // Stamp it with Control Room's external_ref so the feed can report it back as added.
     const { data, error } = await supabase
       .from('competencies')
-      .insert({ category_id: rCatId, subcategory_id: rSubId, name, description: desc })
+      .insert({ category_id: rCatId, subcategory_id: rSubId, name, description: desc, external_ref: review.external_ref })
       .select('id')
       .single();
     if (error) {
