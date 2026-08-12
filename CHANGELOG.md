@@ -1,3 +1,157 @@
+## Trainings describe themselves properly
+
+**What and why.** A training carried only a title, hours, a status and a line of free-text
+notes, so the catalogue could not say what a course actually was: how it is delivered,
+whether it is self-paced, what it covers, what someone can do afterwards, whether it is
+assessed, whether it certificates, or how long it stays current. Nine fields are added.
+
+`family` is the training family from The Nuclear House's published catalogue (Engineering
+disciplines, Safety & regulatory, Lifecycle & delivery, Operational awareness for
+designers, Soft skills). It is a property of the course, not a second competency taxonomy,
+so it does not compete with the framework: the catalogue can now be read either by family,
+which is how the offer is presented, or by competency category, which is derived from the
+learning paths and needs no field at all.
+
+`assessment_method` and `issues_certificate` are deliberately separate. A course can be
+assessed and issue nothing, or issue an attendance certificate having assessed nothing,
+and in nuclear the difference matters when an assessor asks what evidences a SQEP claim.
+`validity_months` records how long a training stays current, which is what a refresher
+schedule will need.
+
+The old `notes` column is folded into `description` and dropped, rather than leaving two
+free-text fields with no clear boundary between them.
+
+**Access in plain English.** No rule changes. The same staff who could edit the catalogue
+still can, with more to fill in.
+
+**SQL (safe to re-run).**
+```sql
+alter table public.trainings add column if not exists family             text;
+alter table public.trainings add column if not exists delivery_mode      text;
+alter table public.trainings add column if not exists pacing             text;
+alter table public.trainings add column if not exists description        text;
+alter table public.trainings add column if not exists outcomes           text[];
+alter table public.trainings add column if not exists assessment_method  text;
+alter table public.trainings add column if not exists issues_certificate boolean not null default false;
+alter table public.trainings add column if not exists validity_months    int;
+alter table public.trainings add column if not exists provider           text;
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'trainings_delivery_mode_chk') then
+    alter table public.trainings add constraint trainings_delivery_mode_chk
+      check (delivery_mode is null or delivery_mode in
+        ('elearning','virtual','in_person','blended','coaching','on_the_job'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'trainings_pacing_chk') then
+    alter table public.trainings add constraint trainings_pacing_chk
+      check (pacing is null or pacing in ('self_paced','instructor_led'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'trainings_assessment_chk') then
+    alter table public.trainings add constraint trainings_assessment_chk
+      check (assessment_method is null or assessment_method in
+        ('none','knowledge_check','exam','practical_observation','portfolio'));
+  end if;
+end $$;
+
+-- Fold the old notes into the description, then drop the column.
+do $$ begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'trainings' and column_name = 'notes') then
+    update public.trainings set description = notes where description is null and notes is not null;
+    alter table public.trainings drop column notes;
+  end if;
+end $$;
+```
+
+`family` deliberately has no check constraint, so a new training family can be added
+without a database change.
+
+**Undo.**
+```sql
+alter table public.trainings add column if not exists notes text;
+update public.trainings set notes = description where notes is null;
+alter table public.trainings drop constraint if exists trainings_delivery_mode_chk;
+alter table public.trainings drop constraint if exists trainings_pacing_chk;
+alter table public.trainings drop constraint if exists trainings_assessment_chk;
+alter table public.trainings drop column if exists family;
+alter table public.trainings drop column if exists delivery_mode;
+alter table public.trainings drop column if exists pacing;
+alter table public.trainings drop column if exists description;
+alter table public.trainings drop column if exists outcomes;
+alter table public.trainings drop column if exists assessment_method;
+alter table public.trainings drop column if exists issues_certificate;
+alter table public.trainings drop column if exists validity_months;
+alter table public.trainings drop column if exists provider;
+```
+
+---
+
+## Remove a leftover test Technical Director account
+
+**What and why.** The launch cleanup removed the four `@sqepify.test` personas, but a test
+Technical Director had been set up under an ordinary-looking address and survived it. This
+removes that one account outright: its SQEPify login, its Supabase auth account, and its
+row on the approved trainers list if it has one.
+
+Five columns record who did something and point at `users`: who created an assessment, who
+marked a training delivered, who reassessed after it, and who requested and decided a
+trainer's move request. None of them delete automatically, so they are cleared first,
+otherwise the delete is refused. Clearing them loses the name against those actions but
+keeps the actions themselves. On a system with no real history yet there is nothing to
+lose.
+
+**Access in plain English.** One account stops existing and can no longer sign in. No rule
+changes. Nobody else is affected.
+
+**SQL (safe to re-run).** Run the review query first and put the address it shows into the
+block below. Do not guess the address.
+
+```sql
+-- Review: every staff login, so the test one can be identified before anything runs.
+select id, email, full_name, product_role, is_active, created_at
+from public.users
+where product_role in ('superadmin', 'technical_director')
+order by product_role, email;
+```
+
+```sql
+-- Replace the address in both places, then run the whole block.
+-- 1. Take them off the approved trainers list. Any training they were listed as
+--    delivering loses them as a deliverer; trainings scheduled with them as trainer
+--    become unassigned rather than being deleted.
+delete from public.trainers
+where user_id in (select id from public.users where lower(email) = lower('td@example.com'));
+
+-- 2. Clear the "who did this" references, which would otherwise refuse the delete.
+update public.assessments set created_by = null
+where created_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_items set delivered_by = null
+where delivered_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_items set assessed_by = null
+where assessed_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_move_requests set requested_by = null
+where requested_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_move_requests set decided_by = null
+where decided_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+-- 3. The SQEPify login, then the Supabase auth account behind it.
+delete from public.users where lower(email) = lower('td@example.com');
+delete from auth.users  where lower(email) = lower('td@example.com');
+```
+
+Then re-run the review query. The address should be gone and every real member of staff
+should still be listed.
+
+**Undo.** There is none. This deletes a row rather than changing structure, so the only way
+back is a Supabase point-in-time restore, or simply creating the person again if they turn
+out to be real.
+
+---
+
 ## Launch cleanup: test logins removed, seeded people cleared
 
 **What and why.** Going live. Two things had to go before real people use SQEPify.

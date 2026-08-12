@@ -11,6 +11,14 @@ arrives in later build-order steps and is added here as it is built.
 ---
 
 
+A training describes one course: its title, the training family it belongs to in the
+published catalogue, how it is delivered (face to face, virtual, e-learning, blended,
+coaching or on the job), whether it is instructor-led or self-paced, its duration in
+hours, what it covers, its learning outcomes, how it is assessed, whether it issues a
+certificate, how many months it stays current before a refresh is due, and who provides
+it. Assessment and certificate are separate facts: a course may assess without
+certificating, or certificate attendance without assessing.
+
 A training has a title, a duration in days, optional notes, and one or more deliverers
 drawn from the approved trainers registry (`training_deliverers`). It addresses one or more
 from-star, to-star). A training therefore can lift several capabilities at once. These
