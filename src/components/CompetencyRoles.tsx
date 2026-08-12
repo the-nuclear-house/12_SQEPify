@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import ConfirmDialog from './ConfirmDialog';
+import LearningPath from './LearningPath';
 import StarRating from './StarRating';
 import type {
   Competency,
@@ -23,6 +24,7 @@ export default function CompetencyRoles() {
   const [roleModal, setRoleModal] = useState<{ mode: 'new' } | { mode: 'edit'; role: Role } | null>(null);
   const [roleName, setRoleName] = useState('');
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [pathComp, setPathComp] = useState<Competency | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
   async function load() {
@@ -194,7 +196,13 @@ export default function CompetencyRoles() {
                         <div className="chip-wrap">
                           {items.map((c) => (
                             <span className="comp-chip" key={c.id}>
-                              {c.name}
+                              <button
+                                className="comp-chip-name"
+                                onClick={() => setPathComp(c)}
+                                title="Open the learning path for this competency"
+                              >
+                                {c.name}
+                              </button>
                               <StarRating value={reqByComp[c.id] ?? 4} onChange={(n) => setLevel(c, n)} showLabel={false} />
                               <button className="chip-x" onClick={() => toggleComp(c)} title="Remove" aria-label={`Remove ${c.name}`}>×</button>
                             </span>
@@ -280,6 +288,14 @@ export default function CompetencyRoles() {
                                 <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleComp(c)} />
                                 <span className="browse-name">{c.name}</span>
                                 {reason && <span className="browse-tag">{reason}</span>}
+                                <button
+                                  type="button"
+                                  className="browse-path-btn"
+                                  title="Open the learning path for this competency"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPathComp(c); }}
+                                >
+                                  Learning path
+                                </button>
                               </label>
                             );
                           })}
@@ -296,6 +312,12 @@ export default function CompetencyRoles() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* learning path for one competency, opened from a role chip or the browser.
+          No edit or delete here: this page manages the role, not the library. */}
+      {pathComp && (
+        <LearningPath competency={pathComp} onClose={() => setPathComp(null)} />
       )}
 
       {confirm && (
