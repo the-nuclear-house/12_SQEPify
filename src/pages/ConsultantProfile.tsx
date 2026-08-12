@@ -533,6 +533,7 @@ function PlanEditor({ assessmentId, horizon, comps, clts, trainingById, trainers
   const [addForComp, setAddForComp] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<PlanItem | null>(null);
 
   // Full screen, but keep the app header visible: pin to top and stop the page behind scrolling.
   useEffect(() => {
@@ -582,6 +583,15 @@ function PlanEditor({ assessmentId, horizon, comps, clts, trainingById, trainers
   }
 
   function removeLine(id: string) { setDraft((d) => d.filter((x) => x.id !== id)); if (sel === id) setSel(null); }
+  function askRemoveLine(id: string) {
+    const it = draft.find((x) => x.id === id);
+    if (!it) return;
+    // A line that has never been saved can just go. Anything else is asked about,
+    // because saving the plan afterwards deletes it and any reassessment recorded
+    // against it for good.
+    if (it.id.startsWith('new-')) { removeLine(id); return; }
+    setPendingRemove(it);
+  }
   function setTrainer(id: string, trainer_id: string | null) { setDraft((d) => d.map((x) => (x.id === id ? { ...x, trainer_id } : x))); }
 
   // Add a learning-path training to a competency lane. The level it reaches comes straight from the path.
@@ -674,7 +684,7 @@ function PlanEditor({ assessmentId, horizon, comps, clts, trainingById, trainers
                 <div className="muted">No training is defined to take {compName(selItem.competency_id)} to level {selItem.to_level}. Add one to this competency's learning path on the Nuclear Competencies page, then it will appear here.</div>
               </div>
               <div className="pe-detail-actions">
-                <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
+                <button className="link-btn danger" onClick={() => askRemoveLine(selItem.id)}>Remove</button>
               </div>
             </>
           ) : (
@@ -691,7 +701,7 @@ function PlanEditor({ assessmentId, horizon, comps, clts, trainingById, trainers
                   </select>
                 </label>
                 {selTrainerOpts.length === 0 && <span className="muted">No approved trainers for this training yet.</span>}
-                <button className="link-btn danger" onClick={() => removeLine(selItem.id)}>Remove</button>
+                <button className="link-btn danger" onClick={() => askRemoveLine(selItem.id)}>Remove</button>
               </div>
             </>
           )}
@@ -704,6 +714,24 @@ function PlanEditor({ assessmentId, horizon, comps, clts, trainingById, trainers
           competencyName={compName(addForComp)}
           onAdd={(tid, level) => addPathTraining(addForComp, tid, level)}
           onClose={() => setAddForComp(null)}
+        />
+      )}
+
+      {pendingRemove && (
+        <ConfirmDialog
+          title="Remove from the plan"
+          confirmLabel="Remove"
+          message={
+            `Remove ${pendingRemove.kind === 'missing'
+              ? `the "training to be defined" line for ${compName(pendingRemove.competency_id)}`
+              : `"${trainingById[pendingRemove.training_id ?? '']?.title ?? 'this training'}"`} from the plan?` +
+            (pendingRemove.status === 'delivered' || pendingRemove.status === 'assessed'
+              ? ' This training has already been delivered, and removing it also removes the reassessment recorded against it.'
+              : '') +
+            ' It takes effect when you save the plan.'
+          }
+          onConfirm={() => { removeLine(pendingRemove.id); setPendingRemove(null); }}
+          onCancel={() => setPendingRemove(null)}
         />
       )}
     </div>
@@ -754,6 +782,7 @@ export default function ConsultantProfile() {
   const [valScores, setValScores] = useState<Record<string, number>>({});
   const [vaIdx, setVaIdx] = useState(0);
   const [confirmSubmit, setConfirmSubmit] = useState<null | 'self' | 'validation'>(null);
+  const [confirmRegen, setConfirmRegen] = useState(false);
   const [drillCat, setDrillCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1669,7 +1698,7 @@ export default function ConsultantProfile() {
                   <p className="nuke-msg">Nuclearisation plan complete</p>
                   <p className="muted">{planItems.length} training{planItems.length === 1 ? '' : 's'} scheduled to take {firstName} to SQEP.</p>
                   <button className="btn btn-primary btn-block" onClick={() => { setModalStep(null); setEditorOpen(true); }}>View and refine</button>
-                  <button className="link-btn" onClick={generatePlan} disabled={planning}>{planning ? 'Rebuilding…' : 'Regenerate from gaps'}</button>
+                  <button className="link-btn" onClick={() => setConfirmRegen(true)} disabled={planning}>{planning ? 'Rebuilding…' : 'Regenerate from gaps'}</button>
                 </div>
               ) : (
                 <>
@@ -1776,6 +1805,20 @@ export default function ConsultantProfile() {
           <span className="self-nudge-dot" />Complete your self-assessment
         </button>
       )}
+      {confirmRegen && (
+        <ConfirmDialog
+          title="Rebuild the plan?"
+          confirmLabel="Rebuild"
+          message={
+            `This deletes the current plan for ${firstName} and builds it again from the gaps. ` +
+            `Every change made by hand is lost: the months each training sits on, the trainers assigned to them, ` +
+            `and any deliveries and reassessments already recorded against it. This cannot be undone.`
+          }
+          onConfirm={() => { setConfirmRegen(false); generatePlan(); }}
+          onCancel={() => setConfirmRegen(false)}
+        />
+      )}
+
       {confirmSubmit && (
         <ConfirmDialog
           title={confirmSubmit === 'self' ? 'Submit self-assessment?' : 'Submit validation?'}

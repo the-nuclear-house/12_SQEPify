@@ -1226,7 +1226,40 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
 .stars.gain .star.on { color: var(--brand-green); }
 .band-arrow { color: var(--text-faint); font-size: 14px; }
 
-/* Training catalogue */
+/* Training catalogue: search, status filter, and grouping by competency category */
+.training-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.training-search { flex: 1; min-width: 240px; margin-bottom: 0; }
+.training-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin: 0 0 14px; }
+.training-group { margin-bottom: 28px; }
+.training-group-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.training-group-name {
+  font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--brand-cyan);
+}
+.training-group-count {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--text-faint);
+  background: rgba(255,255,255,0.06); padding: 1px 7px; border-radius: 999px;
+}
+.training-group.orphans .training-group-name { color: var(--brand-gold); }
+.training-group-hint { font-size: 12px; color: var(--text-muted); margin: -4px 0 12px; }
+
+/* What a training develops: the learning paths it sits on */
+.training-paths { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.training-path-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text); background: var(--surface-3);
+  border: 1px solid var(--border); padding: 4px 11px; border-radius: 999px;
+}
+.tp-cat {
+  font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--brand-cyan);
+}
+.tp-level { font-family: var(--font-mono); font-size: 10px; color: var(--brand-gold); }
+.training-none-path { font-size: 12px; color: var(--brand-gold); margin: 0 0 10px; }
+
 .training-list { display: flex; flex-direction: column; gap: 14px; }
 .training-card {
   display: flex; gap: 20px; align-items: stretch; justify-content: space-between;
