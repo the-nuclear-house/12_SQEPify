@@ -1086,6 +1086,13 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
   font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--text-faint); background: rgba(255,255,255,0.05); padding: 3px 7px; border-radius: 5px;
 }
+.browse-path-btn {
+  border: 1px solid var(--border); background: transparent; color: var(--text-faint);
+  font-size: 11px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  opacity: 0.45; transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.browse-row:hover .browse-path-btn, .browse-path-btn:focus-visible { opacity: 1; }
+.browse-path-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Add-competencies card sits on its own row in a role */
 .add-row-grid { margin-top: 14px; }
@@ -1137,6 +1144,15 @@ textarea.field { resize: vertical; min-height: 64px; font-family: var(--font-bod
   padding: 8px 8px 8px 14px;
   background: var(--surface-3); border: 1px solid var(--border);
   border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--text);
+}
+/* The competency name in a role chip opens its learning path */
+.comp-chip-name {
+  border: none; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: left;
+  border-bottom: 1px solid transparent;
+}
+.comp-chip-name:hover, .comp-chip-name:focus-visible {
+  color: var(--accent); border-bottom-color: var(--accent); outline: none;
 }
 .chip-x {
   display: inline-flex; align-items: center; justify-content: center;

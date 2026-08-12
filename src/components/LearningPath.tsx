@@ -16,8 +16,10 @@ export default function LearningPath({
 }: {
   competency: Competency;
   onClose: () => void;
-  onEdit: (c: Competency) => void;
-  onDelete: (c: Competency) => void;
+  /** Library only. Left out when the path is opened from somewhere the
+   *  competency itself should not be renamed or deleted, such as a role. */
+  onEdit?: (c: Competency) => void;
+  onDelete?: (c: Competency) => void;
 }) {
   const [desc, setDesc] = useState<Record<number, string>>({});
   const [picks, setPicks] = useState<Record<number, string[]>>({});
@@ -97,10 +99,12 @@ export default function LearningPath({
           <div className="modal-step">
             {error && <p className="sync-msg err">{error}</p>}
             {competency.description && <p className="comp-modal-desc">{competency.description}</p>}
-            <div className="lp-actions">
-              <button className="btn btn-sm" onClick={() => onEdit(competency)}>Edit competency</button>
-              <button className="link-btn danger" onClick={() => onDelete(competency)}>Delete</button>
-            </div>
+            {(onEdit || onDelete) && (
+              <div className="lp-actions">
+                {onEdit && <button className="btn btn-sm" onClick={() => onEdit(competency)}>Edit competency</button>}
+                {onDelete && <button className="link-btn danger" onClick={() => onDelete(competency)}>Delete</button>}
+              </div>
+            )}
 
             <div className="lp-flow">
               {LEVELS.map((l) => {
