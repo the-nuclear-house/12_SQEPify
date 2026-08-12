@@ -33,7 +33,7 @@ left exactly as they are.
 **SQL.** The script is `supabase/training_catalogue.sql`. Open it, copy the whole thing,
 paste and run. It is safe to re-run: a second run updates the same rows rather than
 duplicating them. It must be run **after** the "Trainings describe themselves properly"
-SQL below, which adds the columns it fills. Four check queries at the end report the
+SQL below, which adds the columns it fills. Three check queries at the end report the
 catalogue by family and status, any hole left in a competency's ladder, and any training
 that reaches nothing.
 
