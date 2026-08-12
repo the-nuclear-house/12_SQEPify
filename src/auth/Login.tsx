@@ -4,24 +4,15 @@ import { useAuth } from './AuthProvider';
 import { isSupabaseConfigured } from '../lib/supabase';
 import Logo from '../components/Logo';
 
-const TEST_LOGIN = ['true', '1', 'yes', 'on'].includes((import.meta.env.VITE_ENABLE_TEST_LOGIN ?? '').toString().trim().toLowerCase());
-
-// Test personas (created by docs/test-users.sql, password 123456). Temporary; remove before launch.
-const PERSONAS = [
-  { label: 'Superadmin', email: 'super@sqepify.test' },
-  { label: 'Technical Director', email: 'td@sqepify.test' },
-  { label: 'Consultant', email: 'consultant@sqepify.test' },
-  { label: 'Trainer', email: 'trainer@sqepify.test' },
-];
-
 export default function Login() {
   const { signIn, signInWithEmail, session } = useAuth();
+  const [manual, setManual] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function testSignIn() {
+  async function manualSignIn() {
     setBusy(true);
     setError(null);
     const { error } = await signInWithEmail(email.trim(), password);
@@ -29,12 +20,9 @@ export default function Login() {
     setBusy(false);
   }
 
-  async function quickSignIn(personaEmail: string) {
-    setBusy(true);
+  function toggleManual() {
     setError(null);
-    const { error } = await signInWithEmail(personaEmail, '123456');
-    if (error) setError(error);
-    setBusy(false);
+    setManual((open) => !open);
   }
 
   // Once a session exists (password or SSO), leave the login screen.
@@ -67,43 +55,47 @@ export default function Login() {
           </div>
         )}
 
-        {TEST_LOGIN && (
-          <div className="test-login">
-            <div className="test-login-label">Test login (no SSO)</div>
-            <div className="persona-grid">
-              {PERSONAS.map((p) => (
-                <button key={p.email} className="btn btn-sm persona-btn" onClick={() => quickSignIn(p.email)} disabled={busy}>
-                  {p.label}
-                </button>
-              ))}
+        <div className="manual-login">
+          <button
+            className="btn btn-sm btn-ghost manual-login-toggle"
+            onClick={toggleManual}
+            aria-expanded={manual}
+          >
+            {manual ? 'Hide manual sign in' : 'Sign in manually'}
+          </button>
+
+          {manual && (
+            <div className="manual-login-fields">
+              <input
+                className="field"
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+              />
+              <input
+                className="field"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && email && password && !busy) manualSignIn();
+                }}
+              />
+              <button
+                className="btn btn-block"
+                onClick={manualSignIn}
+                disabled={busy || !email || !password}
+              >
+                {busy ? 'Signing in…' : 'Sign in'}
+              </button>
+              {error && <div className="config-warn">{error}</div>}
             </div>
-            <div className="test-login-or">or sign in manually</div>
-            <input
-              className="field"
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="username"
-            />
-            <input
-              className="field"
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-            <button
-              className="btn btn-block"
-              onClick={testSignIn}
-              disabled={busy || !email || !password}
-            >
-              {busy ? 'Signing in…' : 'Test sign in'}
-            </button>
-            {error && <div className="config-warn">{error}</div>}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
