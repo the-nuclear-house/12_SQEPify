@@ -1,3 +1,91 @@
+## Trainings describe themselves properly
+
+**What and why.** A training carried only a title, hours, a status and a line of free-text
+notes, so the catalogue could not say what a course actually was: how it is delivered,
+whether it is self-paced, what it covers, what someone can do afterwards, whether it is
+assessed, whether it certificates, or how long it stays current. Nine fields are added.
+
+`family` is the training family from The Nuclear House's published catalogue (Engineering
+disciplines, Safety & regulatory, Lifecycle & delivery, Operational awareness for
+designers, Soft skills). It is a property of the course, not a second competency taxonomy,
+so it does not compete with the framework: the catalogue can now be read either by family,
+which is how the offer is presented, or by competency category, which is derived from the
+learning paths and needs no field at all.
+
+`assessment_method` and `issues_certificate` are deliberately separate. A course can be
+assessed and issue nothing, or issue an attendance certificate having assessed nothing,
+and in nuclear the difference matters when an assessor asks what evidences a SQEP claim.
+`validity_months` records how long a training stays current, which is what a refresher
+schedule will need.
+
+The old `notes` column is folded into `description` and dropped, rather than leaving two
+free-text fields with no clear boundary between them.
+
+**Access in plain English.** No rule changes. The same staff who could edit the catalogue
+still can, with more to fill in.
+
+**SQL (safe to re-run).**
+```sql
+alter table public.trainings add column if not exists family             text;
+alter table public.trainings add column if not exists delivery_mode      text;
+alter table public.trainings add column if not exists pacing             text;
+alter table public.trainings add column if not exists description        text;
+alter table public.trainings add column if not exists outcomes           text[];
+alter table public.trainings add column if not exists assessment_method  text;
+alter table public.trainings add column if not exists issues_certificate boolean not null default false;
+alter table public.trainings add column if not exists validity_months    int;
+alter table public.trainings add column if not exists provider           text;
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'trainings_delivery_mode_chk') then
+    alter table public.trainings add constraint trainings_delivery_mode_chk
+      check (delivery_mode is null or delivery_mode in
+        ('elearning','virtual','in_person','blended','coaching','on_the_job'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'trainings_pacing_chk') then
+    alter table public.trainings add constraint trainings_pacing_chk
+      check (pacing is null or pacing in ('self_paced','instructor_led'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'trainings_assessment_chk') then
+    alter table public.trainings add constraint trainings_assessment_chk
+      check (assessment_method is null or assessment_method in
+        ('none','knowledge_check','exam','practical_observation','portfolio'));
+  end if;
+end $$;
+
+-- Fold the old notes into the description, then drop the column.
+do $$ begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'trainings' and column_name = 'notes') then
+    update public.trainings set description = notes where description is null and notes is not null;
+    alter table public.trainings drop column notes;
+  end if;
+end $$;
+```
+
+`family` deliberately has no check constraint, so a new training family can be added
+without a database change.
+
+**Undo.**
+```sql
+alter table public.trainings add column if not exists notes text;
+update public.trainings set notes = description where notes is null;
+alter table public.trainings drop constraint if exists trainings_delivery_mode_chk;
+alter table public.trainings drop constraint if exists trainings_pacing_chk;
+alter table public.trainings drop constraint if exists trainings_assessment_chk;
+alter table public.trainings drop column if exists family;
+alter table public.trainings drop column if exists delivery_mode;
+alter table public.trainings drop column if exists pacing;
+alter table public.trainings drop column if exists description;
+alter table public.trainings drop column if exists outcomes;
+alter table public.trainings drop column if exists assessment_method;
+alter table public.trainings drop column if exists issues_certificate;
+alter table public.trainings drop column if exists validity_months;
+alter table public.trainings drop column if exists provider;
+```
+
+---
+
 ## Remove a leftover test Technical Director account
 
 **What and why.** The launch cleanup removed the four `@sqepify.test` personas, but a test

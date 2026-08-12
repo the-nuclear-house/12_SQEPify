@@ -154,7 +154,24 @@ export interface Training {
   title: string;
   duration_hours: number | null;
   status: string;
-  notes: string | null;
+  /** The Nuclear House training family this course belongs to, from the published catalogue. */
+  family: string | null;
+  /** elearning | virtual | in_person | blended | coaching | on_the_job */
+  delivery_mode: string | null;
+  /** self_paced | instructor_led */
+  pacing: string | null;
+  /** What the training covers. Replaced the old free-text `notes`. */
+  description: string | null;
+  /** What someone can do afterwards, one outcome per entry. */
+  outcomes: string[] | null;
+  /** none | knowledge_check | exam | practical_observation | portfolio */
+  assessment_method: string | null;
+  /** Whether completing it produces a certificate. Independent of assessment. */
+  issues_certificate: boolean;
+  /** How long it stays current before a refresh is due. Null means it does not expire. */
+  validity_months: number | null;
+  /** Who supplies it: in-house, a named vendor, an awarding body. */
+  provider: string | null;
   sort_order: number;
   created_at: string;
 }

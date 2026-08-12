@@ -238,7 +238,7 @@ function MissingTrainingModal({ comp, fromLevel, toLevel, missingId, trainers, e
     if (!title.trim()) return;
     setBusy(true); setErr(null);
     const { data, error } = await supabase.from('trainings')
-      .insert({ title: title.trim(), duration_hours: hours.trim() === '' ? null : Math.max(0, Math.round(Number(hours))), status: 'active', notes: null })
+      .insert({ title: title.trim(), duration_hours: hours.trim() === '' ? null : Math.max(0, Math.round(Number(hours))), status: 'active' })
       .select('id').single();
     if (error) { setErr(error.message); setBusy(false); return; }
     const id = (data as { id: string }).id;

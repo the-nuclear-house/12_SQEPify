@@ -12,8 +12,40 @@ import type {
 
 type Status = 'active' | 'required';
 type Modal = { mode: 'new' } | { mode: 'edit'; training: Training } | null;
-type View = 'category' | 'all';
+type View = 'family' | 'category' | 'all';
 type StatusFilter = 'all' | 'active' | 'required';
+
+/** The Nuclear House's published training families, in the order they are presented. */
+const FAMILIES = [
+  'Engineering disciplines',
+  'Safety & regulatory',
+  'Lifecycle & delivery',
+  'Operational awareness for designers',
+  'Soft skills',
+];
+
+const MODES: { value: string; label: string }[] = [
+  { value: 'in_person', label: 'Face to face' },
+  { value: 'virtual', label: 'Virtual' },
+  { value: 'elearning', label: 'E-learning' },
+  { value: 'blended', label: 'Blended' },
+  { value: 'coaching', label: 'Coaching (1:1)' },
+  { value: 'on_the_job', label: 'On the job' },
+];
+const PACING: { value: string; label: string }[] = [
+  { value: 'instructor_led', label: 'Instructor-led' },
+  { value: 'self_paced', label: 'Self-paced' },
+];
+const ASSESSMENTS: { value: string; label: string }[] = [
+  { value: 'none', label: 'No assessment' },
+  { value: 'knowledge_check', label: 'Knowledge check' },
+  { value: 'exam', label: 'Exam' },
+  { value: 'practical_observation', label: 'Practical observation' },
+  { value: 'portfolio', label: 'Portfolio' },
+];
+
+const labelOf = (list: { value: string; label: string }[], v: string | null) =>
+  (v && list.find((x) => x.value === v)?.label) || null;
 
 /** One place a training sits on a learning path: a competency, and the level it reaches. */
 interface PathUse {
@@ -36,13 +68,23 @@ export default function TrainingCatalogue() {
 
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [view, setView] = useState<View>('category');
+  const [modeFilter, setModeFilter] = useState<string>('all');
+  const [view, setView] = useState<View>('family');
+  const [detail, setDetail] = useState<Training | null>(null);
 
   const [modal, setModal] = useState<Modal>(null);
   const [title, setTitle] = useState('');
+  const [family, setFamily] = useState('');
   const [hours, setHours] = useState('');
   const [status, setStatus] = useState<Status>('active');
-  const [notes, setNotes] = useState('');
+  const [mode, setMode] = useState('');
+  const [pace, setPace] = useState('');
+  const [provider, setProvider] = useState('');
+  const [assessment, setAssessment] = useState('');
+  const [certificate, setCertificate] = useState(false);
+  const [validity, setValidity] = useState('');
+  const [description, setDescription] = useState('');
+  const [outcomes, setOutcomes] = useState('');
   const [delivererIds, setDelivererIds] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
 
@@ -82,7 +124,6 @@ export default function TrainingCatalogue() {
   const catNameById = useMemo(() => Object.fromEntries(cats.map((c) => [c.id, c.name])), [cats]);
 
   // Where each training is used: the competencies whose learning path it sits on.
-  // This is what organises the catalogue, so a training is found by what it develops.
   const pathsByTraining = useMemo(() => {
     const m: Record<string, PathUse[]> = {};
     clts.forEach((r) => {
@@ -107,25 +148,42 @@ export default function TrainingCatalogue() {
     return trainings.filter((t) => {
       if (statusFilter === 'active' && t.status === 'required') return false;
       if (statusFilter === 'required' && t.status !== 'required') return false;
+      if (modeFilter !== 'all' && t.delivery_mode !== modeFilter) return false;
       if (!needle) return true;
       const dels = (delByTraining[t.id] ?? []).map((id) => trainerById[id]?.display_name ?? '');
       const uses = pathsByTraining[t.id] ?? [];
       const hay = [
         t.title,
-        t.notes ?? '',
+        t.family ?? '',
+        t.description ?? '',
+        t.provider ?? '',
+        ...(t.outcomes ?? []),
         ...dels,
         ...uses.map((u) => u.compName),
         ...uses.map((u) => u.catName),
       ].join(' ').toLowerCase();
       return hay.includes(needle);
     });
-  }, [trainings, q, statusFilter, delByTraining, trainerById, pathsByTraining]);
+  }, [trainings, q, statusFilter, modeFilter, delByTraining, trainerById, pathsByTraining]);
 
-  // Grouped by competency category, in the library's own order. A training that
-  // develops competencies in two categories appears under both. Anything on no
-  // learning path is gathered at the end, because the plan builder can never
-  // schedule it.
-  const groups = useMemo(() => {
+  // Grouped by the published training family, in catalogue order.
+  const byFamily = useMemo(() => {
+    const out: { id: string; name: string; items: Training[] }[] = [];
+    const known = new Set(FAMILIES);
+    FAMILIES.forEach((f) => {
+      const items = filtered.filter((t) => t.family === f);
+      if (items.length) out.push({ id: f, name: f, items });
+    });
+    // Anything filed under a family not in the published list, then anything unfiled.
+    const extras = [...new Set(filtered.map((t) => t.family).filter((f): f is string => !!f && !known.has(f)))].sort();
+    extras.forEach((f) => out.push({ id: f, name: f, items: filtered.filter((t) => t.family === f) }));
+    const none = filtered.filter((t) => !t.family);
+    if (none.length) out.push({ id: 'none', name: 'No family set', items: none });
+    return out;
+  }, [filtered]);
+
+  // Grouped by competency category, derived from the learning paths the training sits on.
+  const byCategory = useMemo(() => {
     const out: { id: string; name: string; items: Training[] }[] = [];
     cats.forEach((cat) => {
       const items = filtered.filter((t) => (pathsByTraining[t.id] ?? []).some((u) => u.catId === cat.id));
@@ -137,25 +195,45 @@ export default function TrainingCatalogue() {
   }, [cats, filtered, pathsByTraining]);
 
   function openNew() {
-    setTitle(''); setHours(''); setStatus('active'); setNotes(''); setDelivererIds([]);
+    setTitle(''); setFamily(''); setHours(''); setStatus('active');
+    setMode(''); setPace(''); setProvider(''); setAssessment(''); setCertificate(false);
+    setValidity(''); setDescription(''); setOutcomes(''); setDelivererIds([]);
     setModal({ mode: 'new' });
   }
   function openEdit(t: Training) {
     setTitle(t.title);
+    setFamily(t.family ?? '');
     setHours(t.duration_hours != null ? String(t.duration_hours) : '');
     setStatus((t.status as Status) ?? 'active');
-    setNotes(t.notes ?? '');
+    setMode(t.delivery_mode ?? '');
+    setPace(t.pacing ?? '');
+    setProvider(t.provider ?? '');
+    setAssessment(t.assessment_method ?? '');
+    setCertificate(!!t.issues_certificate);
+    setValidity(t.validity_months != null ? String(t.validity_months) : '');
+    setDescription(t.description ?? '');
+    setOutcomes((t.outcomes ?? []).join('\n'));
     setDelivererIds(delByTraining[t.id] ?? []);
+    setDetail(null);
     setModal({ mode: 'edit', training: t });
   }
 
   async function save() {
     if (!modal || !title.trim()) return;
+    const lines = outcomes.split('\n').map((s) => s.replace(/^[-•\s]+/, '').trim()).filter(Boolean);
     const payload = {
       title: title.trim(),
+      family: family || null,
       duration_hours: hours.trim() === '' ? null : Math.max(0, Math.round(Number(hours))),
       status,
-      notes: notes.trim() || null,
+      delivery_mode: mode || null,
+      pacing: pace || null,
+      provider: provider.trim() || null,
+      assessment_method: assessment || null,
+      issues_certificate: certificate,
+      validity_months: validity.trim() === '' ? null : Math.max(0, Math.round(Number(validity))),
+      description: description.trim() || null,
+      outcomes: lines.length ? lines : null,
     };
     let id: string;
     if (modal.mode === 'new') {
@@ -176,11 +254,11 @@ export default function TrainingCatalogue() {
   }
 
   function del(t: Training) {
-    const uses = pathsByTraining[t.id] ?? [];
-    const names = [...new Set(uses.map((u) => u.compName))];
+    const names = [...new Set((pathsByTraining[t.id] ?? []).map((u) => u.compName))];
     const usedLine = names.length
       ? ` It is on the learning path of ${names.length === 1 ? names[0] : `${names.length} competencies (${names.join(', ')})`}, and is taken off ${names.length === 1 ? 'it' : 'them'}. Any training already scheduled on a consultant's plan is removed from that plan too.`
       : '';
+    setDetail(null);
     setConfirm({
       title: 'Delete training',
       message: `Delete "${t.title}"?${usedLine} This cannot be undone.`,
@@ -188,14 +266,32 @@ export default function TrainingCatalogue() {
     });
   }
 
-  function card(t: Training) {
+  /** The small facts shown on a card and again at the top of the detail modal. */
+  function badges(t: Training) {
     const required = t.status === 'required';
+    return (
+      <>
+        <span className={`status-pill ${required ? 'req' : 'act'}`}>{required ? 'Required' : 'Active'}</span>
+        {t.delivery_mode && <span className="t-badge mode">{labelOf(MODES, t.delivery_mode)}</span>}
+        {t.pacing && <span className="t-badge">{labelOf(PACING, t.pacing)}</span>}
+        <span className="training-duration">{t.duration_hours != null ? `${t.duration_hours} hour${t.duration_hours === 1 ? '' : 's'}` : 'Duration not set'}</span>
+        {t.assessment_method && t.assessment_method !== 'none' && <span className="t-badge">{labelOf(ASSESSMENTS, t.assessment_method)}</span>}
+        {t.issues_certificate && <span className="t-badge cert">Certificate</span>}
+        {t.validity_months != null && <span className="t-badge">Refresh every {t.validity_months} months</span>}
+        {t.provider && <span className="t-badge">{t.provider}</span>}
+      </>
+    );
+  }
+
+  function card(t: Training) {
     const dels = (delByTraining[t.id] ?? []).map((id) => trainerById[id]?.display_name).filter(Boolean);
     const uses = pathsByTraining[t.id] ?? [];
     return (
-      <div className={`training-card${required ? ' required' : ''}`} key={t.id}>
+      <div className={`training-card${t.status === 'required' ? ' required' : ''}`} key={t.id}>
         <div className="training-head">
-          <div className="training-title">{t.title}</div>
+          <button className="training-title-btn" onClick={() => setDetail(t)} title="Open the full details">
+            {t.title}
+          </button>
           <div className="tree-actions">
             <button className="link-btn" onClick={() => openEdit(t)}>Edit</button>
             <button className="link-btn danger" onClick={() => del(t)}>Delete</button>
@@ -219,24 +315,38 @@ export default function TrainingCatalogue() {
         )}
 
         <div className="training-foot">
-          <span className={`status-pill ${required ? 'req' : 'act'}`}>{required ? 'Required' : 'Active'}</span>
-          <span className="training-duration">{t.duration_hours != null ? `${t.duration_hours} hour${t.duration_hours === 1 ? '' : 's'}` : 'Duration not set'}</span>
+          {badges(t)}
           {dels.length > 0 && (
             <span className="training-deliverers">{dels.map((n, i) => <span className="mini-chip" key={i}>{n}</span>)}</span>
           )}
         </div>
-        {t.notes && <p className="training-notes">{t.notes}</p>}
+
+        {t.description && <p className="training-notes">{t.description}</p>}
       </div>
     );
   }
 
-  const filtering = q.trim() !== '' || statusFilter !== 'all';
+  function group(g: { id: string; name: string; items: Training[] }, orphanHint: string | null) {
+    return (
+      <section className={`training-group${g.id === 'none' ? ' orphans' : ''}`} key={g.id}>
+        <header className="training-group-head">
+          <span className="training-group-name">{g.name}</span>
+          <span className="training-group-count">{g.items.length}</span>
+        </header>
+        {g.id === 'none' && orphanHint && <p className="training-group-hint">{orphanHint}</p>}
+        <div className="training-list">{g.items.map(card)}</div>
+      </section>
+    );
+  }
+
+  const filtering = q.trim() !== '' || statusFilter !== 'all' || modeFilter !== 'all';
 
   return (
     <div>
       <div className="lib-toolbar">
         <div className="view-toggle">
-          <button className={view === 'category' ? 'active' : ''} onClick={() => setView('category')}>By category</button>
+          <button className={view === 'family' ? 'active' : ''} onClick={() => setView('family')}>By family</button>
+          <button className={view === 'category' ? 'active' : ''} onClick={() => setView('category')}>By competency</button>
           <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All trainings</button>
         </div>
         <button className="btn btn-primary" onClick={openNew}>+ Add training</button>
@@ -245,16 +355,20 @@ export default function TrainingCatalogue() {
       <div className="training-filters">
         <input
           className="field training-search"
-          placeholder="Search by training, competency, category or trainer…"
+          placeholder="Search by training, competency, outcome, provider or trainer…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+        <select className="field training-mode-filter" value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
+          <option value="all">Any delivery</option>
+          {MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
         <div className="view-toggle">
           <button className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>All</button>
           <button className={statusFilter === 'active' ? 'active' : ''} onClick={() => setStatusFilter('active')}>Active</button>
           <button className={statusFilter === 'required' ? 'active' : ''} onClick={() => setStatusFilter('required')}>Required</button>
         </div>
-        {filtering && <button className="link-btn" onClick={() => { setQ(''); setStatusFilter('all'); }}>Clear</button>}
+        {filtering && <button className="link-btn" onClick={() => { setQ(''); setStatusFilter('all'); setModeFilter('all'); }}>Clear</button>}
       </div>
 
       {error && <p className="sync-msg err">{error}</p>}
@@ -271,26 +385,77 @@ export default function TrainingCatalogue() {
             {filtering ? `${filtered.length} of ${trainings.length} trainings` : `${trainings.length} training${trainings.length === 1 ? '' : 's'}`}
           </p>
 
-          {view === 'all' ? (
-            <div className="training-list">{filtered.map(card)}</div>
-          ) : (
-            groups.map((g) => (
-              <section className={`training-group${g.id === 'none' ? ' orphans' : ''}`} key={g.id}>
-                <header className="training-group-head">
-                  <span className="training-group-name">{g.name}</span>
-                  <span className="training-group-count">{g.items.length}</span>
-                </header>
-                {g.id === 'none' && (
-                  <p className="training-group-hint">
-                    These are not attached to any competency, so the plan builder cannot use them. Add each one to a
-                    competency's learning path on the Nuclear Competencies page.
-                  </p>
-                )}
-                <div className="training-list">{g.items.map(card)}</div>
-              </section>
-            ))
-          )}
+          {view === 'all' && <div className="training-list">{filtered.map(card)}</div>}
+          {view === 'family' && byFamily.map((g) => group(g, 'These are not filed under a training family yet. Open each one and set it, so it appears with the rest of the catalogue.'))}
+          {view === 'category' && byCategory.map((g) => group(g, 'These are not attached to any competency, so the plan builder cannot use them. Add each one to a competency’s learning path on the Nuclear Competencies page.'))}
         </>
+      )}
+
+      {/* full details for one training */}
+      {detail && (
+        <div className="modal-overlay" onClick={() => setDetail(null)}>
+          <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h2>{detail.title}</h2>
+                <p className="modal-sub">{detail.family ?? 'No family set'}</p>
+              </div>
+              <button className="modal-close" onClick={() => setDetail(null)} aria-label="Close">×</button>
+            </div>
+            <div className="modal-step">
+              <div className="training-foot detail-badges">{badges(detail)}</div>
+
+              {detail.description ? (
+                <>
+                  <p className="modal-sub">What it covers</p>
+                  <p className="comp-modal-desc">{detail.description}</p>
+                </>
+              ) : (
+                <p className="muted">No description yet.</p>
+              )}
+
+              {(detail.outcomes ?? []).length > 0 && (
+                <>
+                  <p className="modal-sub">By the end, they can</p>
+                  <ul className="t-outcomes">
+                    {(detail.outcomes ?? []).map((o, i) => <li key={i}>{o}</li>)}
+                  </ul>
+                </>
+              )}
+
+              <p className="modal-sub">Develops</p>
+              {(pathsByTraining[detail.id] ?? []).length > 0 ? (
+                <div className="training-paths">
+                  {(pathsByTraining[detail.id] ?? []).map((u) => (
+                    <span className="training-path-chip" key={`${u.compId}-${u.level}`}>
+                      <span className="tp-cat">{u.catName}</span>
+                      {u.compName}
+                      <span className="tp-level">to {u.level}★</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="training-none-path">Not on any competency's learning path yet.</p>
+              )}
+
+              <p className="modal-sub">Delivered by</p>
+              {(delByTraining[detail.id] ?? []).length > 0 ? (
+                <div className="training-deliverers">
+                  {(delByTraining[detail.id] ?? []).map((id) => (
+                    <span className="mini-chip" key={id}>{trainerById[id]?.display_name ?? 'Unknown'}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No approved trainer listed yet.</p>
+              )}
+
+              <div className="modal-actions">
+                <button className="btn" onClick={() => openEdit(detail)}>Edit training</button>
+                <button className="link-btn danger" onClick={() => del(detail)}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {modal && (
@@ -302,7 +467,14 @@ export default function TrainingCatalogue() {
             </div>
             <div className="modal-step">
               <label>Title</label>
-              <input className="field" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Nuclear Safety Culture Foundations" />
+              <input className="field" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. ALARP Demonstration in Practice" />
+
+              <label>Training family</label>
+              <select className="field" value={family} onChange={(e) => setFamily(e.target.value)}>
+                <option value="">Not set</option>
+                {FAMILIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                {family && !FAMILIES.includes(family) && <option value={family}>{family}</option>}
+              </select>
 
               <label>Status</label>
               <div className="status-toggle">
@@ -311,8 +483,55 @@ export default function TrainingCatalogue() {
               </div>
               <p className="muted card-hint">Required means the training is needed but not built yet. Its card shows red.</p>
 
-              <label>Duration (hours)</label>
-              <input className="field no-spin" type="number" min="0" step="1" inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="e.g. 16" />
+              <div className="t-field-row">
+                <div>
+                  <label>Delivery</label>
+                  <select className="field" value={mode} onChange={(e) => setMode(e.target.value)}>
+                    <option value="">Not set</option>
+                    {MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label>Pacing</label>
+                  <select className="field" value={pace} onChange={(e) => setPace(e.target.value)}>
+                    <option value="">Not set</option>
+                    {PACING.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label>Duration (hours)</label>
+                  <input className="field no-spin" type="number" min="0" step="1" inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="e.g. 16" />
+                </div>
+              </div>
+
+              <div className="t-field-row">
+                <div>
+                  <label>Assessment</label>
+                  <select className="field" value={assessment} onChange={(e) => setAssessment(e.target.value)}>
+                    <option value="">Not set</option>
+                    {ASSESSMENTS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label>Valid for (months)</label>
+                  <input className="field no-spin" type="number" min="0" step="1" inputMode="numeric" value={validity} onChange={(e) => setValidity(e.target.value)} placeholder="Blank = no expiry" />
+                </div>
+                <div>
+                  <label>Provider</label>
+                  <input className="field" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="e.g. In-house, IOSH" />
+                </div>
+              </div>
+
+              <label className="browse-row t-cert-row">
+                <input type="checkbox" checked={certificate} onChange={(e) => setCertificate(e.target.checked)} />
+                <span className="browse-name">Completing this produces a certificate</span>
+              </label>
+
+              <label>What it covers</label>
+              <textarea className="field" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="The content of the training, in a few sentences." />
+
+              <label>Learning outcomes (one per line)</label>
+              <textarea className="field" rows={5} value={outcomes} onChange={(e) => setOutcomes(e.target.value)} placeholder={'Explain the ALARP principle and where it applies\nProduce an ALARP argument for a design change'} />
 
               <label>Deliverers (from approved trainers)</label>
               {trainers.length === 0 ? (
@@ -328,9 +547,6 @@ export default function TrainingCatalogue() {
                   ))}
                 </div>
               )}
-
-              <label>Notes (optional)</label>
-              <textarea className="field" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything useful about this training" />
 
               <button className="btn btn-primary btn-block" onClick={save} disabled={!title.trim()}>
                 {modal.mode === 'new' ? 'Add training' : 'Save changes'}
