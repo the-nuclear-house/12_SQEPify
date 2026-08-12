@@ -1,3 +1,109 @@
+## Launch cleanup: test logins removed, seeded people cleared
+
+**What and why.** Going live. Two things had to go before real people use SQEPify.
+
+First, the login page. The four one-click test personas (Superadmin, Technical Director,
+Consultant, Trainer, all signing in as `@sqepify.test` with a shared password) are gone,
+along with the `VITE_ENABLE_TEST_LOGIN` switch that revealed them. Microsoft 365 is now
+the only thing offered up front. The email and password sign in is kept, because it is
+the way back in if SSO ever fails, but it is folded away behind a small "Sign in
+manually" button and only opens when that is pressed. Worth being clear about the
+trade-off: leaving password sign in switched on in production means anyone holding a
+Supabase password account can get in without going through Microsoft 365. That is
+acceptable only while the test accounts are deleted (below) and no new password accounts
+are created.
+
+Second, the seeded people. Everything person-shaped in the database was test data: the
+cached consultants, their assessments, self and validated scores, training plans,
+delivery outcomes and move requests, the consultant trainers, and the test logins. All of
+it is removed so the first real consultant synced from Control Room arrives into a clean
+system. The competency framework is untouched: categories, subcategories, competencies,
+their codes and level descriptors, learning paths, roles and required levels, the
+training catalogue, external and Technical Director trainers, and the AI settings all
+stay exactly as they are.
+
+**Access in plain English.** No rule changes. What changes is who exists: the four test
+accounts are deleted outright, consultant logins are deleted and will be recreated
+automatically by the next Control Room sync, and real staff logins are left alone. Step 0
+makes sure the live superadmin account exists before anything is deleted, so there is no
+window in which nobody can get in.
+
+**SQL (safe to re-run).** Run the whole block in one go, top to bottom. Check the email
+address in step 0 is the Microsoft 365 address you sign in with before you run it.
+
+```sql
+-- 0. Make sure the live superadmin exists before any account is removed.
+insert into public.users (email, full_name, product_role, is_active)
+values ('login@thenuclearhouse.co.uk', 'The Nuclear House', 'superadmin', true)
+on conflict do nothing;
+
+update public.users
+set product_role = 'superadmin', is_active = true
+where lower(email) = lower('login@thenuclearhouse.co.uk');
+
+-- 1. Every person-level record, child tables first.
+delete from public.plan_move_requests;
+delete from public.plan_item_outcomes;
+delete from public.plan_items;
+delete from public.assessment_scores;
+delete from public.assessment_roles;
+delete from public.assessments;
+delete from public.consultants;
+
+-- 2. Trainers that only existed because of the seeded people: consultant
+-- trainers, trainers tied to a test login, and any left pointing at nothing.
+-- This also drops them from any training's list of deliverers.
+delete from public.trainers
+where kind = 'consultant'
+   or user_id in (select id from public.users where email ilike '%@sqepify.test')
+   or (user_id is not null
+       and not exists (select 1 from public.users u where u.id = trainers.user_id));
+
+-- 3. The logins. Consultant logins are recreated by the next sync; the test
+-- personas go for good. Real staff logins are kept.
+delete from public.users
+where product_role = 'consultant'
+   or email ilike '%@sqepify.test';
+
+-- 4. The Supabase auth accounts behind the test personas.
+delete from auth.users where email ilike '%@sqepify.test';
+
+-- 5. Reset the sync marker so the first real pull reads as the first pull.
+update public.sync_state
+set last_sync_at = null, last_pulled = null, last_marked_left = null, updated_at = now()
+where id = true;
+```
+
+Then check what is left. The first query should show only real staff, the second should
+show the framework still fully populated and every people table empty.
+
+```sql
+select email, full_name, product_role, is_active
+from public.users order by product_role, email;
+
+select
+  (select count(*) from public.competency_categories)    as categories,
+  (select count(*) from public.competencies)             as competencies,
+  (select count(*) from public.roles)                    as roles,
+  (select count(*) from public.role_competencies)        as role_competencies,
+  (select count(*) from public.trainings)                as trainings,
+  (select count(*) from public.competency_level_paths)   as learning_paths,
+  (select count(*) from public.trainers)                 as trainers_left,
+  (select count(*) from public.consultants)              as consultants_left,
+  (select count(*) from public.assessments)              as assessments_left,
+  (select count(*) from public.plan_items)               as plan_items_left;
+```
+
+**Undo.** There is none. This deletes data rather than changing structure, so the only
+way back is a Supabase point-in-time restore taken before the block was run. Take a
+backup first if the seeded people are worth keeping, which they should not be.
+
+**Vercel (not SQL).** Delete the `VITE_ENABLE_TEST_LOGIN` environment variable from the
+project settings. The code no longer reads it, so it does nothing, but leaving it there
+would suggest a test mode still exists.
+
+---
+
 ## Feed reports back what happened to each Control Room suggestion
 
 **What and why.** Control Room now lets a technical director score a proposed competency

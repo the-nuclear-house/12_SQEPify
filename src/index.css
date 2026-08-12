@@ -730,21 +730,18 @@ button {
   .profile-lower { grid-template-columns: 1fr; }
 }
 
-/* Test login */
-.test-login {
-  margin-top: 22px;
-  padding-top: 20px;
+/* Manual (email and password) sign in, collapsed behind a small button */
+.manual-login {
+  margin-top: 20px;
+  padding-top: 18px;
   border-top: 1px solid var(--border-soft);
-  text-align: left;
 }
-.test-login-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.manual-login-toggle {
   color: var(--text-faint);
-  margin-bottom: 10px;
-  text-align: center;
+}
+.manual-login-fields {
+  margin-top: 14px;
+  text-align: left;
 }
 .field {
   width: 100%;
@@ -1855,11 +1852,6 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .move-req-actions { display: flex; align-items: center; gap: 10px; }
 .cohort-actions { display: flex; align-items: center; gap: 10px; }
 .cohort-month { width: auto; padding: 4px 8px; }
-
-/* Test login persona buttons (temporary) */
-.persona-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
-.persona-btn { width: 100%; }
-.test-login-or { text-align: center; font-size: 12px; color: var(--text-faint); margin: 10px 0 6px; }
 
 /* Clean role picker (set-up): chips above, search box, overlay dropdown that doesn't reflow */
 .rolepick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
