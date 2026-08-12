@@ -1,3 +1,56 @@
+## Real training catalogue, replacing the formula-generated one
+
+**What and why.** The catalogue was one course per competency per level, four stock titles
+and four stock notes repeated across the framework. With 57 competencies that implied
+around 230 courses, none of which describe a real thing. It is replaced with a catalogue
+of 76 entries: The Nuclear House's 31 published courses, 41 courses the framework needs
+and does not yet have, and two development routes that are not courses at all.
+
+Published courses are `active`. Courses that do not exist yet are `required`, which is what
+that status was built for, so the catalogue doubles as the build backlog and the red cards
+show exactly what is owed.
+
+Two training families are added beyond the published five, because the framework reaches
+further than the published catalogue does: **Safety analysis & assessment** (safety case,
+fault analysis, PSA, criticality, shielding, human reliability) and **Project controls &
+planning** (eight competencies that had no training at all).
+
+Levels 4 and 5 are filled by *Supervised Practice with a Technical Director* and *Expert
+Development: Mentoring & Independent Peer Review*, applied only where no course already
+reaches that level. A course builds knowledge; supervised practice is what evidences that
+someone can be relied on unsupervised, and expertise is demonstrated by being trusted to
+judge other people's work. Level 2 is filled by four short awareness modules, one per area
+of the framework. Every competency now has a route at every level, so no plan will show a
+"Training Missing" placeholder.
+
+Trainings gain a stable `code`, the same idea as competencies, so the catalogue can be
+updated in place rather than rebuilt.
+
+**Access in plain English.** No rule changes. Nothing outside the training catalogue and
+the learning path links is touched: competencies, subcategories, categories and roles are
+left exactly as they are.
+
+**SQL.** The script is `supabase/training_catalogue.sql`. Open it, copy the whole thing,
+paste and run. It is safe to re-run: a second run updates the same rows rather than
+duplicating them. It must be run **after** the "Trainings describe themselves properly"
+SQL below, which adds the columns it fills. Four check queries at the end report the
+catalogue by family and status, any hole left in a competency's ladder, and any training
+that reaches nothing.
+
+Two consequences to expect. The old trainings are deleted, so any deliverer you had set
+against them is lost and has to be set again on the new catalogue. And the script assigns
+no deliverers, because who teaches what is your decision, not something to be seeded.
+
+**Undo.** There is none that restores the old catalogue, which was generated rather than
+written. To reverse it, delete the new rows and start again:
+```sql
+delete from public.trainings where code is not null;
+drop index if exists public.trainings_code_unique;
+alter table public.trainings drop column if exists code;
+```
+
+---
+
 ## Trainings describe themselves properly
 
 **What and why.** A training carried only a title, hours, a status and a line of free-text

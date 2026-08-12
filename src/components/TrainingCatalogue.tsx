@@ -19,8 +19,10 @@ type StatusFilter = 'all' | 'active' | 'required';
 const FAMILIES = [
   'Engineering disciplines',
   'Safety & regulatory',
+  'Safety analysis & assessment',
   'Lifecycle & delivery',
   'Operational awareness for designers',
+  'Project controls & planning',
   'Soft skills',
 ];
 
