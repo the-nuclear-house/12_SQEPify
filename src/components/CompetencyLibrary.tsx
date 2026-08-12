@@ -28,6 +28,8 @@ export default function CompetencyLibrary() {
   const [subs, setSubs] = useState<CompetencySubcategory[]>([]);
   const [comps, setComps] = useState<Competency[]>([]);
   const [completeIds, setCompleteIds] = useState<Set<string>>(new Set());
+  // Which roles require each competency, so a delete can say what it will break.
+  const [roleNamesByComp, setRoleNamesByComp] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,14 +59,16 @@ export default function CompetencyLibrary() {
 
   async function load() {
     setLoading(true);
-    const [c, s, k, lp, pr] = await Promise.all([
+    const [c, s, k, lp, pr, rl, rc] = await Promise.all([
       supabase.from('competency_categories').select('*').order('sort_order').order('name'),
       supabase.from('competency_subcategories').select('*').order('sort_order').order('name'),
       supabase.from('competencies').select('*').order('sort_order').order('name'),
       supabase.from('competency_level_paths').select('competency_id, level, actions'),
       supabase.from('competency_suggestion_inbox').select('*').eq('status', 'pending').order('submitted_at', { ascending: true }),
+      supabase.from('roles').select('id, name'),
+      supabase.from('role_competencies').select('competency_id, role_id'),
     ]);
-    const err = c.error || s.error || k.error || lp.error || pr.error;
+    const err = c.error || s.error || k.error || lp.error || pr.error || rl.error || rc.error;
     if (err) setError(err.message);
     else {
       setError(null);
@@ -83,6 +87,15 @@ export default function CompetencyLibrary() {
         if (ls && [2, 3, 4, 5].every((n) => ls.has(n))) complete.add(comp.id);
       });
       setCompleteIds(complete);
+      const roleName: Record<string, string> = Object.fromEntries(
+        ((rl.data as { id: string; name: string }[]) ?? []).map((r) => [r.id, r.name]),
+      );
+      const used: Record<string, string[]> = {};
+      ((rc.data as { competency_id: string; role_id: string }[]) ?? []).forEach((r) => {
+        const n = roleName[r.role_id];
+        if (n) (used[r.competency_id] ??= []).push(n);
+      });
+      setRoleNamesByComp(used);
     }
     setLoading(false);
   }
@@ -173,9 +186,23 @@ export default function CompetencyLibrary() {
   };
   const deleteComp = (comp: Competency) => {
     setModal(null);
+    // Deleting a competency cascades: its learning path, the trainings chosen for
+    // each level, every role that requires it, and any assessment score or plan
+    // item that refers to it all go with it. Say so before asking.
+    const usedIn = roleNamesByComp[comp.id] ?? [];
+    const rolesLine =
+      usedIn.length === 1
+        ? ` It is required by the role ${usedIn[0]}, and is removed from it.`
+        : usedIn.length > 1
+          ? ` It is required by ${usedIn.length} roles (${usedIn.join(', ')}), and is removed from all of them.`
+          : '';
     setConfirm({
       title: 'Delete competency',
-      message: `Delete "${comp.name}"? This removes it from the library. This cannot be undone.`,
+      message:
+        `Delete "${comp.name}"? This removes it from the library along with its learning path and the ` +
+        `trainings chosen for each level, and from any assessment score or training plan that refers to it.` +
+        `${rolesLine} Control Room links to competencies by code, so that link is broken too. ` +
+        `This cannot be undone.`,
       onYes: () => run(supabase.from('competencies').delete().eq('id', comp.id)),
     });
   };
@@ -277,11 +304,14 @@ export default function CompetencyLibrary() {
         ) : (
           <div className="comp-grid comp-grid-all">
             {allComps.map((c) => (
-              <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
-                <span className="c-breadcrumb">{catById[c.category_id]}{c.subcategory_id && subById[c.subcategory_id] ? ` · ${subById[c.subcategory_id]}` : ''}</span>
-                <span className="c-name">{c.name}</span>
-                {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
-              </button>
+              <div className="comp-card-slot" key={c.id}>
+                <button className="comp-card" onClick={() => setPathComp(c)} title="Open learning path">
+                  <span className="c-breadcrumb">{catById[c.category_id]}{c.subcategory_id && subById[c.subcategory_id] ? ` · ${subById[c.subcategory_id]}` : ''}</span>
+                  <span className="c-name">{c.name}</span>
+                  {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
+                </button>
+                <button className="comp-card-del" onClick={() => deleteComp(c)} title={`Delete ${c.name}`} aria-label={`Delete ${c.name}`}>×</button>
+              </div>
             ))}
           </div>
         )
@@ -328,10 +358,13 @@ export default function CompetencyLibrary() {
                     </div>
                     <div className="comp-grid">
                       {activeComps.map((c) => (
-                        <button className="comp-card" key={c.id} onClick={() => setPathComp(c)} title="Open learning path">
-                          <span className="c-name">{c.name}</span>
-                          {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
-                        </button>
+                        <div className="comp-card-slot" key={c.id}>
+                          <button className="comp-card" onClick={() => setPathComp(c)} title="Open learning path">
+                            <span className="c-name">{c.name}</span>
+                            {!completeIds.has(c.id) && <span className="c-flag">Incomplete</span>}
+                          </button>
+                          <button className="comp-card-del" onClick={() => deleteComp(c)} title={`Delete ${c.name}`} aria-label={`Delete ${c.name}`}>×</button>
+                        </div>
                       ))}
                       <button className="comp-card comp-add" onClick={() => openNew(cat.id, activeSubObj.id)}>
                         <span className="plus">+</span><span>Add competency</span>
