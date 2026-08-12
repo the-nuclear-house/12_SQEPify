@@ -23,9 +23,13 @@
 -- ----------------------------------------------------------------------------
 -- 1. A stable code, so this catalogue can be updated rather than rebuilt.
 -- ----------------------------------------------------------------------------
+-- The index must NOT be partial. Postgres will not infer a partial unique index
+-- for "on conflict (code)" unless the clause repeats the predicate, and a plain
+-- unique index already allows any number of null codes, which is what a training
+-- added by hand through the UI will have.
 alter table public.trainings add column if not exists code text;
-create unique index if not exists trainings_code_unique
-  on public.trainings (code) where code is not null;
+drop index if exists public.trainings_code_unique;
+create unique index trainings_code_unique on public.trainings (code);
 
 
 -- ----------------------------------------------------------------------------
