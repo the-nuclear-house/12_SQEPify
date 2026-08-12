@@ -957,6 +957,21 @@ button {
   transition: border-color .15s, transform .1s, background .15s;
 }
 .comp-card:hover { border-color: var(--accent); transform: translateY(-1px); background: #31404f; }
+/* A competency card and its own delete control. The card keeps a clear right-hand
+   gutter so the × never sits on top of the name or the Incomplete flag. */
+.comp-card-slot { position: relative; display: grid; }
+.comp-card-slot .comp-card { padding-right: 38px; }
+.comp-card-del {
+  position: absolute; top: 50%; right: 9px; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%;
+  background: rgba(255,255,255,0.06); color: var(--text-faint);
+  font-size: 15px; line-height: 1; opacity: 0.4;
+  transition: opacity .12s ease, background .12s ease, color .12s ease;
+}
+.comp-card-slot:hover .comp-card-del { opacity: 1; transform: translateY(calc(-50% - 1px)); }
+.comp-card-del:focus-visible { opacity: 1; }
+.comp-card-del:hover { background: rgba(207,90,10,0.18); color: var(--danger); }
 .comp-card.comp-add {
   flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   background: transparent; border: 1px dashed var(--slate);
