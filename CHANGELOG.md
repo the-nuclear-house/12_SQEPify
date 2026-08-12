@@ -1,3 +1,69 @@
+## Remove a leftover test Technical Director account
+
+**What and why.** The launch cleanup removed the four `@sqepify.test` personas, but a test
+Technical Director had been set up under an ordinary-looking address and survived it. This
+removes that one account outright: its SQEPify login, its Supabase auth account, and its
+row on the approved trainers list if it has one.
+
+Five columns record who did something and point at `users`: who created an assessment, who
+marked a training delivered, who reassessed after it, and who requested and decided a
+trainer's move request. None of them delete automatically, so they are cleared first,
+otherwise the delete is refused. Clearing them loses the name against those actions but
+keeps the actions themselves. On a system with no real history yet there is nothing to
+lose.
+
+**Access in plain English.** One account stops existing and can no longer sign in. No rule
+changes. Nobody else is affected.
+
+**SQL (safe to re-run).** Run the review query first and put the address it shows into the
+block below. Do not guess the address.
+
+```sql
+-- Review: every staff login, so the test one can be identified before anything runs.
+select id, email, full_name, product_role, is_active, created_at
+from public.users
+where product_role in ('superadmin', 'technical_director')
+order by product_role, email;
+```
+
+```sql
+-- Replace the address in both places, then run the whole block.
+-- 1. Take them off the approved trainers list. Any training they were listed as
+--    delivering loses them as a deliverer; trainings scheduled with them as trainer
+--    become unassigned rather than being deleted.
+delete from public.trainers
+where user_id in (select id from public.users where lower(email) = lower('td@example.com'));
+
+-- 2. Clear the "who did this" references, which would otherwise refuse the delete.
+update public.assessments set created_by = null
+where created_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_items set delivered_by = null
+where delivered_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_items set assessed_by = null
+where assessed_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_move_requests set requested_by = null
+where requested_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+update public.plan_move_requests set decided_by = null
+where decided_by in (select id from public.users where lower(email) = lower('td@example.com'));
+
+-- 3. The SQEPify login, then the Supabase auth account behind it.
+delete from public.users where lower(email) = lower('td@example.com');
+delete from auth.users  where lower(email) = lower('td@example.com');
+```
+
+Then re-run the review query. The address should be gone and every real member of staff
+should still be listed.
+
+**Undo.** There is none. This deletes a row rather than changing structure, so the only way
+back is a Supabase point-in-time restore, or simply creating the person again if they turn
+out to be real.
+
+---
+
 ## Launch cleanup: test logins removed, seeded people cleared
 
 **What and why.** Going live. Two things had to go before real people use SQEPify.
