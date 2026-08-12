@@ -25,7 +25,7 @@ export default function CompetencyRoles() {
   const [roleName, setRoleName] = useState('');
   const [browseOpen, setBrowseOpen] = useState(false);
   const [pathComp, setPathComp] = useState<Competency | null>(null);
-  const [confirm, setConfirm] = useState<{ title: string; message: string; onYes: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel?: string; onYes: () => void } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -130,13 +130,27 @@ export default function CompetencyRoles() {
 
   async function toggleComp(c: Competency) {
     if (!selectedRoleId) return;
+    // Adding is harmless and immediate. Removing changes what everyone holding
+    // this role is measured against, so it always asks first.
     if (inSelected.has(c.id)) {
-      const { error } = await supabase.from('role_competencies').delete().eq('role_id', selectedRoleId).eq('competency_id', c.id);
-      if (error) setError(error.message);
-    } else {
-      const { error } = await supabase.from('role_competencies').insert({ role_id: selectedRoleId, competency_id: c.id });
-      if (error) setError(error.message);
+      setConfirm({
+        title: 'Remove competency from role',
+        confirmLabel: 'Remove',
+        message:
+          `Remove "${c.name}" from ${selectedRole?.name ?? 'this role'}? Anyone assessed against this role ` +
+          `will no longer be measured on it. The competency itself stays in the library with its learning path, ` +
+          `so it can be added back.`,
+        onYes: async () => {
+          const { error } = await supabase.from('role_competencies').delete().eq('role_id', selectedRoleId).eq('competency_id', c.id);
+          if (error) setError(error.message);
+          setConfirm(null);
+          refresh();
+        },
+      });
+      return;
     }
+    const { error } = await supabase.from('role_competencies').insert({ role_id: selectedRoleId, competency_id: c.id });
+    if (error) setError(error.message);
     refresh();
   }
 
@@ -324,6 +338,7 @@ export default function CompetencyRoles() {
         <ConfirmDialog
           title={confirm.title}
           message={confirm.message}
+          confirmLabel={confirm.confirmLabel}
           onConfirm={() => confirm.onYes()}
           onCancel={() => setConfirm(null)}
         />
