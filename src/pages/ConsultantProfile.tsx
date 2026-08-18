@@ -779,6 +779,9 @@ export default function ConsultantProfile() {
   const [selfScores, setSelfScores] = useState<Record<string, number>>({});
   const [selfNotes, setSelfNotes] = useState<Record<string, string>>({});
   const [saIdx, setSaIdx] = useState(0);
+  // The self-assessment opens on a briefing page, not straight on competency 1.
+  // Without it people did not realise the stars were the question.
+  const [saStarted, setSaStarted] = useState(false);
   const [valScores, setValScores] = useState<Record<string, number>>({});
   const [vaIdx, setVaIdx] = useState(0);
   const [confirmSubmit, setConfirmSubmit] = useState<null | 'self' | 'validation'>(null);
@@ -1040,6 +1043,7 @@ export default function ConsultantProfile() {
       setSelfScores(seed);
       setSelfNotes(seedNotes);
       setSaIdx(0);
+      setSaStarted(false);
     }
     if (modalStep === 2) {
       const seed: Record<string, number> = {};
@@ -1261,7 +1265,9 @@ export default function ConsultantProfile() {
   return (
     <div className="profile">
       <div className="page-head">
-        <Link className="back-link" to="/consultants">← Consultants</Link>
+        {/* Only staff arrive here from a list. For a consultant this is their own
+            page and the only one they have, so there is nothing to go back to. */}
+        {isStaff && <Link className="back-link" to="/consultants">← Consultants</Link>}
         <h1>{name}</h1>
         <p>{consultant.job_title ? consultant.job_title : 'Consultant'}{consultant.is_active ? '' : ' · Leaver'}</p>
       </div>
@@ -1557,6 +1563,43 @@ export default function ConsultantProfile() {
                 <p className="muted">Set-up has to be completed first.</p>
               ) : applicable.length === 0 ? (
                 <p className="muted">No competencies in scope yet. Add roles in Set-up.</p>
+              ) : (isSelf || user?.product_role === 'superadmin') && assessment.status === 'self_assessment' && !saStarted ? (
+                <div className="sa-intro">
+                  <h3 className="sa-intro-title">Your self-assessment</h3>
+                  <p>
+                    This is your self-assessment for <strong>{consultant.job_title || 'your role'}</strong>,
+                    against Base Nuclear{selected.length ? ` and ${selected.map(roleName).join(', ')}` : ''}.
+                    There {selfList.length === 1 ? 'is 1 competency' : `are ${selfList.length} competencies`} to
+                    go through.
+                  </p>
+                  <p>
+                    Answer with the level you are at <strong>now</strong>, not the level you would like to be at.
+                    Be as truthful as you can. The point is not to score well, it is to show us where the gaps
+                    are so we can build you a plan that closes them.
+                  </p>
+
+                  <p className="sa-intro-lead">For each competency you give a star rating:</p>
+                  <ul className="sa-intro-levels">
+                    <li><span className="sa-intro-stars">★</span><span><strong>No knowledge.</strong> You have not been exposed to this.</span></li>
+                    <li><span className="sa-intro-stars">★★</span><span><strong>Awareness.</strong> You know what it is and why it matters.</span></li>
+                    <li><span className="sa-intro-stars">★★★</span><span><strong>Basic.</strong> You can do it with supervision.</span></li>
+                    <li><span className="sa-intro-stars">★★★★</span><span><strong>SQEP.</strong> You work independently to good practice.</span></li>
+                    <li><span className="sa-intro-stars">★★★★★</span><span><strong>Expert.</strong> You can adapt the approach and coach others.</span></li>
+                  </ul>
+
+                  <p>
+                    <strong>Click the stars to set your level</strong>, then write a short comment explaining why
+                    you put yourself there. Both are needed before you can move on to the next competency.
+                  </p>
+                  <p>
+                    Your Technical Director reviews every answer afterwards and may adjust a level if the
+                    explanation does not support it. That is a normal part of the process, not a mark against you.
+                  </p>
+
+                  <button className="btn btn-primary btn-block" onClick={() => setSaStarted(true)}>
+                    Let’s go, start my assessment
+                  </button>
+                </div>
               ) : (isSelf || user?.product_role === 'superadmin') && assessment.status === 'self_assessment' ? (
                 (() => {
                   const c = selfList[saIdx];
@@ -1585,8 +1628,21 @@ export default function ConsultantProfile() {
                         <textarea className="field" rows={3} value={note} placeholder="e.g. led two safety case reviews on operating plant" onChange={(e) => setSelfNotes((s) => ({ ...s, [c.id]: e.target.value }))} />
                       </label>
                       {error && <p className="sync-msg err">{error}</p>}
+                      {/* Say why the button is dead. A disabled Next with no reason
+                          is what stalled people on their first competency. */}
+                      {!canNext && (
+                        <p className="sa-blocked">
+                          {lvl === 0 && !note.trim()
+                            ? 'Click a star to set your level, then explain why, to continue.'
+                            : lvl === 0
+                              ? 'Click a star to set your level to continue.'
+                              : 'Add a short explanation to continue.'}
+                        </p>
+                      )}
                       <div className="sa-wiz-foot">
-                        <button className="link-btn" disabled={saIdx === 0} onClick={() => setSaIdx((i) => Math.max(0, i - 1))}>Back</button>
+                        <button className="link-btn" onClick={() => (saIdx === 0 ? setSaStarted(false) : setSaIdx((i) => Math.max(0, i - 1)))}>
+                          {saIdx === 0 ? 'Back to the briefing' : 'Back'}
+                        </button>
                         {last ? (
                           <button className="btn btn-primary" disabled={!canNext || saving} onClick={() => setConfirmSubmit('self')}>{saving ? 'Submitting…' : 'Submit self-assessment'}</button>
                         ) : (
