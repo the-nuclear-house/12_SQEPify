@@ -1574,8 +1574,8 @@ export default function ConsultantProfile() {
                   </p>
                   <p>
                     Answer with the level you are at <strong>now</strong>, not the level you would like to be at.
-                    Be as truthful as you can. The point is not to score well, it is to show us where the gaps
-                    are so we can build you a plan that closes them.
+                    Be as truthful as you can. This is how we find where the gaps are, so we can build you a
+                    plan that closes them.
                   </p>
 
                   <p className="sa-intro-lead">For each competency you give a star rating:</p>
@@ -1592,8 +1592,8 @@ export default function ConsultantProfile() {
                     you put yourself there. Both are needed before you can move on to the next competency.
                   </p>
                   <p>
-                    Your Technical Director reviews every answer afterwards and may adjust a level if the
-                    explanation does not support it. That is a normal part of the process, not a mark against you.
+                    Your Technical Director then reviews every answer and may adjust a level based on the
+                    explanation you have given.
                   </p>
 
                   <button className="btn btn-primary btn-block" onClick={() => setSaStarted(true)}>

@@ -21,6 +21,13 @@ maintainer would have to read and interpret.
   fact, the way good British business writing reads.
 - Do not use the long dash character. Use commas, full stops or brackets instead.
 - Be concise. Lead with the answer. Keep caveats short.
+- Never reassure by denying something bad. Naming a fear in order to dismiss it plants
+  it: "this is not a mark against you" leaves the reader holding "against you", and
+  invites them to wonder whether it might be. The same goes for "this is not personal",
+  "do not worry" and "this is nothing to be concerned about". State what happens and
+  why, plainly, and let that do the reassuring. If a process is normal, describing it
+  matter of factly is what makes it read as normal. This applies to anything a user
+  will read on screen, and to how you write to the maintainer.
 
 ## Principles that matter here
 
