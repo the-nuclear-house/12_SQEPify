@@ -782,6 +782,11 @@ export default function ConsultantProfile() {
   // The self-assessment opens on a briefing page, not straight on competency 1.
   // Without it people did not realise the stars were the question.
   const [saStarted, setSaStarted] = useState(false);
+  // The review screen sits between the last competency and submitting.
+  const [saReview, setSaReview] = useState(false);
+  // Each answer is written as it is left, so a crash never costs more than the
+  // competency currently on screen.
+  const [stepSaving, setStepSaving] = useState(false);
   const [valScores, setValScores] = useState<Record<string, number>>({});
   const [vaIdx, setVaIdx] = useState(0);
   const [confirmSubmit, setConfirmSubmit] = useState<null | 'self' | 'validation'>(null);
@@ -1042,7 +1047,14 @@ export default function ConsultantProfile() {
       applicable.forEach((c) => { const sc = scoreByComp[c.id]; seed[c.id] = sc?.self_level ?? sc?.ai_level ?? 0; seedNotes[c.id] = sc?.self_note ?? ''; });
       setSelfScores(seed);
       setSelfNotes(seedNotes);
-      setSaIdx(0);
+      // Resume where they left off: the first competency still missing a level
+      // or an explanation. If every one is answered, go straight to the review.
+      const firstIncomplete = selfList.findIndex((c) => {
+        const sc = scoreByComp[c.id];
+        return !(sc?.self_level && (sc?.self_note ?? '').trim());
+      });
+      setSaIdx(firstIncomplete === -1 ? Math.max(0, selfList.length - 1) : firstIncomplete);
+      setSaReview(firstIncomplete === -1 && selfList.length > 0);
       setSaStarted(false);
     }
     if (modalStep === 2) {
@@ -1183,6 +1195,45 @@ export default function ConsultantProfile() {
       reportLanes(),
     );
     doc.save(`${name} - Upskilling Plan.pdf`);
+  }
+
+  /**
+   * Write one competency's answer as the consultant leaves it. Called on every
+   * move through the wizard, so nothing is held only in the browser. An
+   * unanswered level is stored as null rather than 0, so it still counts as
+   * outstanding and any AI suggestion remains the default.
+   */
+  async function saveStep(competencyId: string): Promise<boolean> {
+    if (!assessment) return false;
+    setStepSaving(true); setError(null);
+    const { error } = await supabase.from('assessment_scores').upsert(
+      {
+        assessment_id: assessment.id,
+        competency_id: competencyId,
+        self_level: selfScores[competencyId] || null,
+        self_note: (selfNotes[competencyId] ?? '').trim() || null,
+      },
+      { onConflict: 'assessment_id,competency_id' },
+    );
+    setStepSaving(false);
+    if (error) { setError(error.message); return false; }
+    return true;
+  }
+
+  async function saNext() {
+    const c = selfList[saIdx];
+    if (!c) return;
+    if (!(await saveStep(c.id))) return;
+    if (saIdx === selfList.length - 1) setSaReview(true);
+    else setSaIdx((i) => i + 1);
+  }
+
+  async function saBack() {
+    const c = selfList[saIdx];
+    // Save whatever is there, even if incomplete, so going back never loses it.
+    if (c) await saveStep(c.id);
+    if (saIdx === 0) setSaStarted(false);
+    else setSaIdx((i) => i - 1);
   }
 
   async function submitSelf() {
@@ -1596,10 +1647,77 @@ export default function ConsultantProfile() {
                     explanation you have given.
                   </p>
 
-                  <button className="btn btn-primary btn-block" onClick={() => setSaStarted(true)}>
-                    Let’s go, start my assessment
-                  </button>
+                  {(() => {
+                    const done = selfList.filter((c) => selfScores[c.id] > 0 && (selfNotes[c.id] ?? '').trim()).length;
+                    return (
+                      <>
+                        {done > 0 && (
+                          <p className="sa-intro-progress">
+                            You have answered {done} of {selfList.length}. Your answers are saved as you go, so
+                            you can stop and come back whenever you like.
+                          </p>
+                        )}
+                        <button className="btn btn-primary btn-block" onClick={() => setSaStarted(true)}>
+                          {saReview
+                            ? 'Review my answers'
+                            : done > 0
+                              ? 'Carry on where I left off'
+                              : 'Let’s go, start my assessment'}
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
+              ) : (isSelf || user?.product_role === 'superadmin') && assessment.status === 'self_assessment' && saReview ? (
+                (() => {
+                  const missing = selfList.filter((c) => !(selfScores[c.id] > 0 && (selfNotes[c.id] ?? '').trim()));
+                  return (
+                    <div className="sa-review">
+                      <h3 className="sa-intro-title">Review your answers</h3>
+                      <p className="sa-review-lead">
+                        Check each one before it goes to your Technical Director. Edit anything you want to
+                        change. Once submitted it is with them.
+                      </p>
+                      {missing.length > 0 && (
+                        <p className="sa-blocked">
+                          {missing.length === 1 ? '1 competency is' : `${missing.length} competencies are`} still
+                          incomplete. Edit {missing.length === 1 ? 'it' : 'them'} below to finish.
+                        </p>
+                      )}
+                      <div className="sa-review-list">
+                        {selfList.map((c, i) => {
+                          const lvl = selfScores[c.id] ?? 0;
+                          const note = (selfNotes[c.id] ?? '').trim();
+                          const done = lvl > 0 && !!note;
+                          return (
+                            <div className={`sa-review-row${done ? '' : ' incomplete'}`} key={c.id}>
+                              <div className="sa-review-main">
+                                <span className="sa-review-cat">{c.category}</span>
+                                <span className="sa-review-name">{c.name}</span>
+                                <span className="sa-review-note">{note || 'No explanation yet'}</span>
+                              </div>
+                              <div className="sa-review-lvl">
+                                {lvl > 0 ? <StarRating value={lvl} readOnly showLabel={false} /> : <span className="sa-review-unset">Not set</span>}
+                              </div>
+                              <button className="link-btn" onClick={() => { setSaReview(false); setSaIdx(i); }}>Edit</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {error && <p className="sync-msg err">{error}</p>}
+                      <div className="sa-wiz-foot">
+                        <button className="link-btn" onClick={() => { setSaReview(false); setSaIdx(Math.max(0, selfList.length - 1)); }}>Back</button>
+                        <button
+                          className="btn btn-primary"
+                          disabled={missing.length > 0 || saving}
+                          onClick={() => setConfirmSubmit('self')}
+                        >
+                          {saving ? 'Submitting…' : 'Submit to my Technical Director'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (isSelf || user?.product_role === 'superadmin') && assessment.status === 'self_assessment' ? (
                 (() => {
                   const c = selfList[saIdx];
@@ -1640,14 +1758,13 @@ export default function ConsultantProfile() {
                         </p>
                       )}
                       <div className="sa-wiz-foot">
-                        <button className="link-btn" onClick={() => (saIdx === 0 ? setSaStarted(false) : setSaIdx((i) => Math.max(0, i - 1)))}>
+                        <button className="link-btn" disabled={stepSaving} onClick={saBack}>
                           {saIdx === 0 ? 'Back to the briefing' : 'Back'}
                         </button>
-                        {last ? (
-                          <button className="btn btn-primary" disabled={!canNext || saving} onClick={() => setConfirmSubmit('self')}>{saving ? 'Submitting…' : 'Submit self-assessment'}</button>
-                        ) : (
-                          <button className="btn btn-primary" disabled={!canNext} onClick={() => setSaIdx((i) => i + 1)}>Next</button>
-                        )}
+                        <span className="sa-saved">Your answers are saved as you go.</span>
+                        <button className="btn btn-primary" disabled={!canNext || stepSaving} onClick={saNext}>
+                          {stepSaving ? 'Saving…' : last ? 'Review my answers' : 'Next'}
+                        </button>
                       </div>
                     </div>
                   );
