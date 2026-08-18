@@ -1782,10 +1782,35 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
   align-items: center;
   gap: 12px;
 }
-.dash-row.um-row-consultant { grid-template-columns: minmax(0, 1fr) 80px; }
+.dash-row.um-row-consultant { grid-template-columns: minmax(0, 1fr) 80px 90px; }
 .um-row .role-pill, .um-row .status-pill { justify-self: center; }
 .um-row .dash-row-name, .um-row .dash-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .um-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+
+/* View-as banner. Deliberately loud: it must never be possible to forget you
+   are looking at someone else's SQEPify. */
+/* The banner and the topbar stick as one block. */
+.app-top { position: sticky; top: 0; z-index: 70; background: var(--bg); }
+.app-top .topbar { position: static; }
+
+.viewas-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px clamp(16px, 4vw, 30px);
+  background: rgba(215, 178, 62, 0.14);
+  border-bottom: 1px solid var(--brand-gold);
+  color: var(--brand-gold);
+  font-size: 13px;
+}
+.viewas-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--brand-gold); flex-shrink: 0;
+  animation: viewasPulse 2s ease-in-out infinite;
+}
+@keyframes viewasPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.viewas-text { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.viewas-text strong { font-weight: 700; }
+.viewas-sub { font-size: 11px; font-family: var(--font-mono); opacity: 0.75; }
+.viewas-exit { margin-left: auto; flex-shrink: 0; border-color: var(--brand-gold); color: var(--brand-gold); }
+.viewas-exit:hover { background: rgba(215, 178, 62, 0.16); border-color: var(--brand-gold); }
 
 @media (max-width: 760px) {
   .dash-row.um-row, .dash-row.um-row-consultant {
