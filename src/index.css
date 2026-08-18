@@ -555,6 +555,13 @@ button {
   color: var(--brand-orange);
 }
 
+.sync-msg.warn {
+  color: var(--brand-gold);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
 .last-sync {
   margin: 14px 0 0;
   font-family: var(--font-mono);
@@ -1766,6 +1773,26 @@ a.dash-row:hover { border-color: var(--accent); background: var(--surface-3); }
 .um-head .panel-title { margin: 0; }
 .dash-row.is-inactive { opacity: 0.6; }
 .um-you { font-size: 11px; font-family: var(--font-mono); }
+
+/* A user row is a grid, not a flex row, so the role, the status and the actions
+   line up down the page instead of drifting with the length of each name. */
+.dash-row.um-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 80px 150px;
+  align-items: center;
+  gap: 12px;
+}
+.dash-row.um-row-consultant { grid-template-columns: minmax(0, 1fr) 80px; }
+.um-row .role-pill, .um-row .status-pill { justify-self: center; }
+.um-row .dash-row-name, .um-row .dash-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.um-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+
+@media (max-width: 760px) {
+  .dash-row.um-row, .dash-row.um-row-consultant {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+  }
+  .um-row .dash-row-main { flex: 1 1 100%; margin-bottom: 8px; }
+}
 .role-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .role-pill.superadmin { color: var(--brand-cyan); background: rgba(0,174,239,0.14); }
 .role-pill.technical_director { color: var(--brand-green); background: rgba(132,195,65,0.14); }
