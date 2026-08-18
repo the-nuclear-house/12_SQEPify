@@ -1261,7 +1261,9 @@ export default function ConsultantProfile() {
   return (
     <div className="profile">
       <div className="page-head">
-        <Link className="back-link" to="/consultants">← Consultants</Link>
+        {/* Only staff arrive here from a list. For a consultant this is their own
+            page and the only one they have, so there is nothing to go back to. */}
+        {isStaff && <Link className="back-link" to="/consultants">← Consultants</Link>}
         <h1>{name}</h1>
         <p>{consultant.job_title ? consultant.job_title : 'Consultant'}{consultant.is_active ? '' : ' · Leaver'}</p>
       </div>
