@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import ConfirmDialog from './ConfirmDialog';
@@ -27,7 +28,15 @@ const ROLE_LABEL: Record<ProductRole, string> = {
 };
 
 export default function UserManagement() {
-  const { user } = useAuth();
+  const { user, startViewAs } = useAuth();
+  const navigate = useNavigate();
+
+  // View-as changes which pages are reachable, and the System page is superadmin
+  // only, so land on the dashboard rather than being bounced off this one.
+  function viewAsUser(u: AppUser) {
+    startViewAs(u);
+    navigate('/');
+  }
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +158,9 @@ export default function UserManagement() {
                 <span className={`role-pill ${u.product_role}`}>{ROLE_LABEL[u.product_role]}</span>
                 <span className={`status-pill ${u.is_active ? 'act' : 'req'}`}>{u.is_active ? 'Active' : 'Inactive'}</span>
                 <div className="um-actions">
+                  {user?.id !== u.id && u.is_active && (
+                    <button className="link-btn" onClick={() => viewAsUser(u)} title={`See SQEPify as ${u.full_name || u.email}`}>View as</button>
+                  )}
                   <button className="link-btn" onClick={() => openEdit(u)}>Edit</button>
                   {user?.id === u.id ? (
                     <span className="muted um-you">you</span>
@@ -179,6 +191,11 @@ export default function UserManagement() {
                   <div className="dash-row-sub">{u.email}</div>
                 </div>
                 <span className={`status-pill ${u.is_active ? 'act' : 'req'}`}>{u.is_active ? 'Active' : 'Left'}</span>
+                <div className="um-actions">
+                  {u.is_active && (
+                    <button className="link-btn" onClick={() => viewAsUser(u)} title={`See SQEPify as ${u.full_name || u.email}`}>View as</button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

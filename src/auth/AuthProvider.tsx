@@ -7,13 +7,25 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, setClientReadOnly } from '../lib/supabase';
 import type { AppUser } from '../lib/types';
 
 interface AuthState {
   session: Session | null;
-  /** The matched, active row from the users table, or null if no access. */
+  /**
+   * Who the app should behave as. Normally the signed-in person, but while a
+   * superadmin is viewing as someone else it is that person, so every screen,
+   * tab and permission check follows without needing to know about view-as.
+   */
   user: AppUser | null;
+  /** Who is actually signed in. Only differs from `user` during view-as. */
+  realUser: AppUser | null;
+  /** The person being viewed as, or null. */
+  viewAs: AppUser | null;
+  isViewingAs: boolean;
+  /** Superadmin only. Anyone else calling this is ignored. */
+  startViewAs: (u: AppUser) => void;
+  stopViewAs: () => void;
   loading: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -47,7 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
+  const [viewAs, setViewAs] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // View-as is read-only: the database session still belongs to the superadmin,
+  // so any write would be recorded against the wrong person.
+  useEffect(() => {
+    setClientReadOnly(!!viewAs);
+    return () => setClientReadOnly(false);
+  }, [viewAs]);
 
   // Only update the session here. Crucially, do NOT call other supabase methods
   // (or await anything) inside this callback: the client holds an internal lock
@@ -73,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     if (!email) {
       setUser(null);
+      setViewAs(null);
       setLoading(false);
       return;
     }
@@ -90,7 +111,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthState>(
     () => ({
       session,
-      user,
+      user: viewAs ?? user,
+      realUser: user,
+      viewAs,
+      isViewingAs: !!viewAs,
+      startViewAs: (u: AppUser) => {
+        if (user?.product_role !== 'superadmin') return;
+        if (u.id === user.id) return;
+        setViewAs(u);
+        // Resolve their trainer flag the same way a real sign-in would, so the
+        // Deliveries tab appears exactly when it would for them.
+        supabase
+          .from('trainers')
+          .select('id')
+          .eq('user_id', u.id)
+          .eq('is_active', true)
+          .limit(1)
+          .then(({ data }) =>
+            setViewAs((cur) =>
+              cur && cur.id === u.id ? { ...cur, is_trainer: (data?.length ?? 0) > 0 } : cur,
+            ),
+          );
+      },
+      stopViewAs: () => setViewAs(null),
       loading,
       signIn: async () => {
         await supabase.auth.signInWithOAuth({
@@ -106,10 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: error ? error.message : null };
       },
       signOut: async () => {
+        setViewAs(null);
         await supabase.auth.signOut();
       },
     }),
-    [session, user, loading],
+    [session, user, viewAs, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

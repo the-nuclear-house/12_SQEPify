@@ -66,7 +66,7 @@ function GearIcon() {
 }
 
 export default function AppShell() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isViewingAs, viewAs, realUser, stopViewAs } = useAuth();
   const role = user?.product_role ?? 'consultant';
   const isConsultant = role === 'consultant';
   const overview = isConsultant ? [] : OVERVIEW.filter((t) => t.roles.includes(role));
@@ -75,7 +75,7 @@ export default function AppShell() {
   const myProfile = isConsultant && user?.consultant_id ? `/consultants/${user.consultant_id}` : null;
 
   // Publish the topbar's height so full-screen overlays (e.g. the plan editor) can sit below it.
-  const barRef = useRef<HTMLElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = barRef.current;
     if (!el) return;
@@ -89,7 +89,23 @@ export default function AppShell() {
 
   return (
     <div className="app-frame">
-      <header className="topbar" ref={barRef}>
+      {/* Banner and topbar stick together, so --topbar-h covers both and the
+          full-screen plan editor still lands directly beneath them. */}
+      <div className="app-top" ref={barRef}>
+      {isViewingAs && (
+        <div className="viewas-bar">
+          <span className="viewas-dot" aria-hidden="true" />
+          <span className="viewas-text">
+            Viewing as <strong>{viewAs?.full_name || viewAs?.email}</strong>
+            <span className="viewas-sub">
+              {ROLE_LABEL[viewAs?.product_role ?? 'consultant']} · read-only · signed in as{' '}
+              {realUser?.full_name || realUser?.email}
+            </span>
+          </span>
+          <button className="btn btn-sm viewas-exit" onClick={stopViewAs}>Exit view-as</button>
+        </div>
+      )}
+      <header className="topbar">
         <div className="brand">
           <span className="logo">
             <Logo size={32} />
@@ -137,6 +153,7 @@ export default function AppShell() {
           </button>
         </div>
       </header>
+      </div>
 
       <main className="page">
         <Outlet />
