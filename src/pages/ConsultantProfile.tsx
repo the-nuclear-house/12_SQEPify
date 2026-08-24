@@ -1217,6 +1217,24 @@ export default function ConsultantProfile() {
     );
     setStepSaving(false);
     if (error) { setError(error.message); return false; }
+
+    // Keep the in-memory copy in step with the database. Without this the saved
+    // answer only exists in the row we just wrote: reopening the wizard without
+    // reloading the page re-seeds from the stale copy, and the work looks lost
+    // even though it is safely stored.
+    setScores((prev) => {
+      const existing = prev.find((s) => s.competency_id === competencyId);
+      const next: AssessmentScore = {
+        assessment_id: assessment.id,
+        competency_id: competencyId,
+        ai_level: existing?.ai_level ?? null,
+        validated_level: existing?.validated_level ?? null,
+        note: existing?.note ?? null,
+        self_level: selfScores[competencyId] || null,
+        self_note: (selfNotes[competencyId] ?? '').trim() || null,
+      };
+      return [...prev.filter((s) => s.competency_id !== competencyId), next];
+    });
     return true;
   }
 
@@ -1226,6 +1244,15 @@ export default function ConsultantProfile() {
     if (!(await saveStep(c.id))) return;
     if (saIdx === selfList.length - 1) setSaReview(true);
     else setSaIdx((i) => i + 1);
+  }
+
+  /** Closing mid-competency keeps whatever is on screen. */
+  async function closeSelf() {
+    const c = selfList[saIdx];
+    if (c && saStarted && !saReview && assessment?.status === 'self_assessment' && (isSelf || user?.product_role === 'superadmin')) {
+      await saveStep(c.id);
+    }
+    setModalStep(null);
   }
 
   async function saBack() {
@@ -1604,11 +1631,14 @@ export default function ConsultantProfile() {
         </div>
       )}
 
-      {/* Self-assessment */}
+      {/* Self-assessment.
+          No click-to-dismiss on the backdrop: this is a long form, and a stray
+          click beside it used to throw the consultant out mid-competency. It
+          closes on the × only, and saves the competency on screen on the way. */}
       {modalStep === 1 && (
-        <div className="modal-overlay" onClick={() => setModalStep(null)}>
+        <div className="modal-overlay">
           <div className="modal modal-tall modal-wide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h2>Self-assessment</h2><button className="modal-close" onClick={() => setModalStep(null)} aria-label="Close">×</button></div>
+            <div className="modal-head"><h2>Self-assessment</h2><button className="modal-close" onClick={closeSelf} aria-label="Close">×</button></div>
             <div className="modal-step">
               {!assessment ? (
                 <p className="muted">Set-up has to be completed first.</p>
